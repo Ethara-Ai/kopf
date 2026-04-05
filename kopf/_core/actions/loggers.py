@@ -8,6 +8,7 @@ This eliminates the need to log & post the same messages, which complicates
 the operators' code, and can lead to information loss or mismatch
 (e.g. when logging call is added, but posting is forgotten).
 """
+
 import copy
 import enum
 import logging
@@ -28,17 +29,18 @@ from kopf._cogs.configs import configuration
 from kopf._cogs.helpers import typedefs
 from kopf._cogs.structs import bodies
 
-logger = logging.getLogger('kopf.objects')
+logger = logging.getLogger("kopf.objects")
 
 # A key for object references in JSON logs, as seen by the log parsers.
-DEFAULT_JSON_REFKEY = 'object'
+DEFAULT_JSON_REFKEY = "object"
 
 
 class LogFormat(enum.Enum):
-    """ Log formats, as specified on CLI. """
-    PLAIN = '%(message)s'
-    FULL = '[%(asctime)s] %(name)-20.20s [%(levelname)-8.8s] %(message)s'
-    JSON = '-json-'  # not used for formatting, only for detection
+    """Log formats, as specified on CLI."""
+
+    PLAIN = "%(message)s"
+    FULL = "[%(asctime)s] %(name)-20.20s [%(levelname)-8.8s] %(message)s"
+    JSON = "-json-"  # not used for formatting, only for detection
 
 
 class ObjectFormatter(logging.Formatter):
@@ -51,23 +53,23 @@ class ObjectTextFormatter(ObjectFormatter, logging.Formatter):
 
 class ObjectJsonFormatter(ObjectFormatter, _pjl_JsonFormatter):
     def __init__(
-            self,
-            *args: Any,
-            refkey: str | None = None,
-            **kwargs: Any,
+        self,
+        *args: Any,
+        refkey: str | None = None,
+        **kwargs: Any,
     ) -> None:
         # Avoid type checking, as the args are not in the parent consructor.
-        reserved_attrs = kwargs.pop('reserved_attrs', _pjl_RESERVED_ATTRS)
+        reserved_attrs = kwargs.pop("reserved_attrs", _pjl_RESERVED_ATTRS)
         reserved_attrs = set(reserved_attrs)
-        reserved_attrs |= {'k8s_skip', 'k8s_ref', 'settings'}
+        reserved_attrs |= {"k8s_skip", "k8s_ref", "settings"}
         kwargs |= dict(reserved_attrs=reserved_attrs)
-        kwargs.setdefault('timestamp', True)
+        kwargs.setdefault("timestamp", True)
         super().__init__(*args, **kwargs)
         self._refkey: str = refkey or DEFAULT_JSON_REFKEY
 
 
-
 class ObjectPrefixingMixin(ObjectFormatter):
+    pass
 
 
 class ObjectPrefixingTextFormatter(ObjectPrefixingMixin, ObjectTextFormatter):
@@ -94,18 +96,23 @@ class ObjectLogger(typedefs.LoggerAdapter):
     (e.g. in case of background posting via the queue; see :class:`K8sPoster`).
     """
 
-    def __init__(self, *, body: bodies.Body, settings: configuration.OperatorSettings) -> None:
-        super().__init__(logger, dict(
-            settings=settings,
-            k8s_skip=False,
-            k8s_ref=dict(
-                apiVersion=body.get('apiVersion'),
-                kind=body.get('kind'),
-                name=body.get('metadata', {}).get('name'),
-                uid=body.get('metadata', {}).get('uid'),
-                namespace=body.get('metadata', {}).get('namespace'),
+    def __init__(
+        self, *, body: bodies.Body, settings: configuration.OperatorSettings
+    ) -> None:
+        super().__init__(
+            logger,
+            dict(
+                settings=settings,
+                k8s_skip=False,
+                k8s_ref=dict(
+                    apiVersion=body.get("apiVersion"),
+                    kind=body.get("kind"),
+                    name=body.get("metadata", {}).get("name"),
+                    uid=body.get("metadata", {}).get("uid"),
+                    namespace=body.get("metadata", {}).get("namespace"),
+                ),
             ),
-        ))
+        )
 
     # Typed with MutableMapping[] to match the parent's signature.
 
@@ -119,7 +126,6 @@ class LocalObjectLogger(ObjectLogger):
 
     This class is used internally only and is not exposed publicly in any way.
     """
-
 
 
 class TerseObjectLogger(LocalObjectLogger):
@@ -141,33 +147,39 @@ class TerseObjectLogger(LocalObjectLogger):
 # since they stream into an stderr interceptor of Click's runner, not to the real stderr.
 # We have to remove the closed streams either when the test finishes, or when the new one starts.
 if TYPE_CHECKING:
+
     class _KopfStreamHandler(logging.StreamHandler[TextIO]):
         pass
 else:
+
     class _KopfStreamHandler(logging.StreamHandler):
         pass
 
 
 def configure(
-        debug: bool | None = None,
-        verbose: bool | None = None,
-        quiet: bool | None = None,
-        log_format: LogFormat = LogFormat.FULL,
-        log_prefix: bool | None = False,
-        log_refkey: str | None = None,
+    debug: bool | None = None,
+    verbose: bool | None = None,
+    quiet: bool | None = None,
+    log_format: LogFormat = LogFormat.FULL,
+    log_prefix: bool | None = False,
+    log_refkey: str | None = None,
 ) -> None:
-    log_level = 'DEBUG' if debug or verbose else 'WARNING' if quiet else 'INFO'
-    formatter = make_formatter(log_format=log_format, log_prefix=log_prefix, log_refkey=log_refkey)
+    log_level = "DEBUG" if debug or verbose else "WARNING" if quiet else "INFO"
+    formatter = make_formatter(
+        log_format=log_format, log_prefix=log_prefix, log_refkey=log_refkey
+    )
     handler = _KopfStreamHandler()
     handler.setFormatter(formatter)
     logger = logging.getLogger()
-    logger.handlers[:] = [h for h in logger.handlers if not isinstance(h, _KopfStreamHandler)]
+    logger.handlers[:] = [
+        h for h in logger.handlers if not isinstance(h, _KopfStreamHandler)
+    ]
     logger.addHandler(handler)
     logger.setLevel(log_level)
 
     # Prevent the low-level logging unless in the debug mode. Keep only the operator's messages.
     # For no-propagation loggers, add a dummy null handler to prevent printing the messages.
-    for name in ['asyncio']:
+    for name in ["asyncio"]:
         logger = logging.getLogger(name)
         logger.propagate = bool(debug)
         if not debug:
@@ -175,11 +187,13 @@ def configure(
 
 
 def make_formatter(
-        log_format: LogFormat = LogFormat.FULL,
-        log_prefix: bool | None = False,
-        log_refkey: str | None = None,
+    log_format: LogFormat = LogFormat.FULL,
+    log_prefix: bool | None = False,
+    log_refkey: str | None = None,
 ) -> ObjectFormatter:
-    log_prefix = log_prefix if log_prefix is not None else bool(log_format is not LogFormat.JSON)
+    log_prefix = (
+        log_prefix if log_prefix is not None else bool(log_format is not LogFormat.JSON)
+    )
     match log_format:
         case LogFormat.JSON:
             if log_prefix:

@@ -8,6 +8,7 @@ As a rule of thumb, for every kwarg named ``whatever``, there should be
 a corresponding type or class ``kopf.Whatever`` with all the typing tricks
 (unions, optionals, partial ``Any`` values, etc) included.
 """
+
 import datetime
 from collections.abc import Collection
 from typing import Any, Protocol, TypeVar
@@ -260,12 +261,20 @@ class MetaFilterFn(Protocol):
 
 
 SpawningFn = DaemonFn | TimerFn
-_FnT = TypeVar('_FnT', WhenFilterFn, MetaFilterFn)
+_FnT = TypeVar("_FnT", WhenFilterFn, MetaFilterFn)
 
 
+def not_(fn: _FnT) -> _FnT:
+    pass
 
 
+def all_(fns: Collection[_FnT]) -> _FnT:
+    pass
 
 
+def any_(fns: Collection[_FnT]) -> _FnT:
+    pass
 
 
+def none_(fns: Collection[_FnT]) -> _FnT:
+    pass

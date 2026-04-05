@@ -52,28 +52,30 @@ from kopf._cogs.structs import bodies, patches, references
 
 logger = logging.getLogger(__name__)
 
-Identity = NewType('Identity', str)
+Identity = NewType("Identity", str)
 
 
 # The class used to represent a peer in the parsed peers list (for convenience).
 # The extra fields are for easier calculation when and if the peer is dead to the moment.
 class Peer:
-
     def __init__(
-            self,
-            *,
-            identity: Identity,
-            priority: int = 0,
-            lifetime: int = 60,
-            lastseen: str | None = None,
-            **_: Any,  # for the forward-compatibility with the new fields
+        self,
+        *,
+        identity: Identity,
+        priority: int = 0,
+        lifetime: int = 60,
+        lastseen: str | None = None,
+        **_: Any,  # for the forward-compatibility with the new fields
     ):
         super().__init__()
         self.identity = identity
         self.priority = priority
         self.lifetime = datetime.timedelta(seconds=int(lifetime))
-        self.lastseen = (iso8601.parse_date(lastseen) if lastseen is not None else
-                         datetime.datetime.now(datetime.timezone.utc))
+        self.lastseen = (
+            iso8601.parse_date(lastseen)
+            if lastseen is not None
+            else datetime.datetime.now(datetime.timezone.utc)
+        )
         self.deadline = self.lastseen + self.lifetime
         self.is_dead = self.deadline <= datetime.datetime.now(datetime.timezone.utc)
 
@@ -85,26 +87,27 @@ class Peer:
     def as_dict(self) -> dict[str, Any]:
         # Only the non-calculated and non-identifying fields.
         return {
-            'priority': int(self.priority),
-            'lifetime': int(self.lifetime.total_seconds()),
-            'lastseen': str(self.lastseen.isoformat()),
+            "priority": int(self.priority),
+            "lifetime": int(self.lifetime.total_seconds()),
+            "lastseen": str(self.lastseen.isoformat()),
         }
 
 
 async def process_peering_event(
-        *,
-        raw_event: bodies.RawEvent,
-        namespace: references.Namespace,
-        resource: references.Resource,
-        identity: Identity,
-        settings: configuration.OperatorSettings,
-        autoclean: bool = True,
-        stream_pressure: asyncio.Event | None = None,  # None for tests
-        conflicts_found: aiotoggles.Toggle | None = None,  # None for tests & observation
-        # Must be accepted whether used or not -- as passed by watcher()/worker().
-        resource_indexed: aiotoggles.Toggle | None = None,  # None for tests & observation
-        operator_indexed: aiotoggles.ToggleSet | None = None,  # None for tests & observation
-        consistency_time: float | None = None,  # None for tests & observation
+    *,
+    raw_event: bodies.RawEvent,
+    namespace: references.Namespace,
+    resource: references.Resource,
+    identity: Identity,
+    settings: configuration.OperatorSettings,
+    autoclean: bool = True,
+    stream_pressure: asyncio.Event | None = None,  # None for tests
+    conflicts_found: aiotoggles.Toggle | None = None,  # None for tests & observation
+    # Must be accepted whether used or not -- as passed by watcher()/worker().
+    resource_indexed: aiotoggles.Toggle | None = None,  # None for tests & observation
+    operator_indexed: aiotoggles.ToggleSet
+    | None = None,  # None for tests & observation
+    consistency_time: float | None = None,  # None for tests & observation
 ) -> None:
     """
     Handle a single update of the peers by us or by other operators.
@@ -117,11 +120,11 @@ async def process_peering_event(
 
 
 async def keepalive(
-        *,
-        namespace: references.Namespace,
-        resource: references.Resource,
-        identity: Identity,
-        settings: configuration.OperatorSettings,
+    *,
+    namespace: references.Namespace,
+    resource: references.Resource,
+    identity: Identity,
+    settings: configuration.OperatorSettings,
 ) -> NoReturn:
     """
     An ever-running coroutine to regularly send our own keep-alive status for the peers.
@@ -143,13 +146,15 @@ async def keepalive(
             await asyncio.sleep(max(1, duration))
     finally:
         try:
-            await asyncio.shield(touch(
-                identity=identity,
-                settings=settings,
-                resource=resource,
-                namespace=namespace,
-                lifetime=0,
-            ))
+            await asyncio.shield(
+                touch(
+                    identity=identity,
+                    settings=settings,
+                    resource=resource,
+                    namespace=namespace,
+                    lifetime=0,
+                )
+            )
         except asyncio.CancelledError:
             pass  # cancellations are treated as normal exiting
         except Exception:
@@ -157,12 +162,12 @@ async def keepalive(
 
 
 async def touch(
-        *,
-        identity: Identity,
-        settings: configuration.OperatorSettings,
-        resource: references.Resource,
-        namespace: references.Namespace,
-        lifetime: int | None = None,
+    *,
+    identity: Identity,
+    settings: configuration.OperatorSettings,
+    resource: references.Resource,
+    namespace: references.Namespace,
+    lifetime: int | None = None,
 ) -> None:
     name = settings.peering.name
     peer = Peer(
@@ -172,7 +177,7 @@ async def touch(
     )
 
     patch = patches.Patch()
-    patch |= {'status': {identity: None if peer.is_dead else peer.as_dict()}}
+    patch |= {"status": {identity: None if peer.is_dead else peer.as_dict()}}
     rsp, remaining_patch = await patching.patch_obj(
         settings=settings,
         resource=resource,
@@ -187,8 +192,6 @@ async def touch(
         where = f"in {namespace!r}" if namespace else "cluster-wide"
         result = "not found" if rsp is None else "ok"
         logger.debug(f"Keep-alive in {name!r} {where}: {result}.")
-
-
 
 
 def detect_own_id(*, manual: bool) -> Identity:
@@ -213,18 +216,20 @@ def detect_own_id(*, manual: bool) -> Identity:
     but is kept here, close to the rest of the peering logic.
     """
 
-    pod = os.environ.get('POD_ID', None)
+    pod = os.environ.get("POD_ID", None)
     if pod is not None:
         return Identity(pod)
 
     user = getpass.getuser()
     host = hostnames.get_descriptive_hostname()
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S")
-    rnd = ''.join(random.choices('abcdefhijklmnopqrstuvwxyz0123456789', k=3))
-    return Identity(f'{user}@{host}' if manual else f'{user}@{host}/{now}/{rnd}')
+    rnd = "".join(random.choices("abcdefhijklmnopqrstuvwxyz0123456789", k=3))
+    return Identity(f"{user}@{host}" if manual else f"{user}@{host}/{now}/{rnd}")
 
 
-def guess_selectors(settings: configuration.OperatorSettings) -> Iterable[references.Selector]:
+def guess_selectors(
+    settings: configuration.OperatorSettings,
+) -> Iterable[references.Selector]:
     if settings.peering.standalone:
         return []
     elif settings.peering.clusterwide:
@@ -232,37 +237,56 @@ def guess_selectors(settings: configuration.OperatorSettings) -> Iterable[refere
     elif settings.peering.namespaced:
         return [references.NAMESPACED_PEERINGS_K, references.NAMESPACED_PEERINGS_Z]
     else:
-        raise TypeError("Unidentified peering mode (none of standalone/cluster/namespaced).")
+        raise TypeError(
+            "Unidentified peering mode (none of standalone/cluster/namespaced)."
+        )
 
 
 async def touch_command(
-        *,
-        lifetime: int | None,
-        insights: references.Insights,
-        identity: Identity,
-        settings: configuration.OperatorSettings,
+    *,
+    lifetime: int | None,
+    insights: references.Insights,
+    identity: Identity,
+    settings: configuration.OperatorSettings,
 ) -> None:
 
-    await asyncio.wait({
-        asyncio.create_task(insights.ready_namespaces.wait()),
-        asyncio.create_task(insights.ready_resources.wait()),
-    })
+    await asyncio.wait(
+        {
+            asyncio.create_task(insights.ready_namespaces.wait()),
+            asyncio.create_task(insights.ready_resources.wait()),
+        }
+    )
 
     selectors = guess_selectors(settings=settings)
     resources = [insights.backbone[s] for s in selectors if s in insights.backbone]
     if not resources:
         raise RuntimeError(f"Cannot find the peering resource for {selectors}.")
 
-    await aiotasks.wait({
-        aiotasks.create_guarded_task(
-            name="peering command", finishable=True, logger=logger,
-            coro=touch(
-                namespace=namespace,
-                resource=resource,
-                identity=identity,
-                settings=settings,
-                lifetime=lifetime),
-        )
-        for namespace in insights.namespaces
-        for resource in resources
-    })
+    await aiotasks.wait(
+        {
+            aiotasks.create_guarded_task(
+                name="peering command",
+                finishable=True,
+                logger=logger,
+                coro=touch(
+                    namespace=namespace,
+                    resource=resource,
+                    identity=identity,
+                    settings=settings,
+                    lifetime=lifetime,
+                ),
+            )
+            for namespace in insights.namespaces
+            for resource in resources
+        }
+    )
+
+
+async def clean(
+    *,
+    peers: Iterable[Peer],
+    settings: configuration.OperatorSettings,
+    resource: references.Resource,
+    namespace: references.Namespace,
+) -> None:
+    pass

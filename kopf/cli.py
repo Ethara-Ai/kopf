@@ -20,7 +20,8 @@ from kopf._kits import loops
 
 @dataclasses.dataclass()
 class CLIControls:
-    """ :class:`KopfRunner` controls, which are impossible to pass via CLI. """
+    """:class:`KopfRunner` controls, which are impossible to pass via CLI."""
+
     ready_flag: aioadapters.Flag | None = None
     stop_flag: aioadapters.Flag | None = None
     vault: credentials.Vault | None = None
@@ -30,14 +31,17 @@ class CLIControls:
 
 
 def logging_options(fn: Callable[..., Any]) -> Callable[..., Any]:
-    """ A decorator to configure logging in all commands the same way."""
-    pass
+    """A decorator to configure logging in all commands the same way."""
+    return fn
 
 
-@click.group(name='kopf', context_settings=dict(
-    auto_envvar_prefix='KOPF',
-))
-@click.version_option(prog_name='kopf')
+@click.group(
+    name="kopf",
+    context_settings=dict(
+        auto_envvar_prefix="KOPF",
+    ),
+)
+@click.version_option(prog_name="kopf")
 @click.make_pass_decorator(CLIControls, ensure=True)
 def main(__controls: CLIControls) -> None:
     pass
@@ -45,34 +49,36 @@ def main(__controls: CLIControls) -> None:
 
 @main.command()
 @logging_options
-@click.option('-A', '--all-namespaces', 'clusterwide', is_flag=True)
-@click.option('-n', '--namespace', 'namespaces', multiple=True)
-@click.option('--standalone', is_flag=True, default=None)
-@click.option('--dev', is_flag=True)
-@click.option('-L', '--liveness', 'liveness_endpoint', type=str)
-@click.option('-P', '--peering', 'peering_name', type=str, envvar='KOPF_RUN_PEERING')
-@click.option('-p', '--priority', type=int)
-@click.option('-m', '--module', 'modules', multiple=True)
-@click.argument('paths', nargs=-1)
+@click.option("-A", "--all-namespaces", "clusterwide", is_flag=True)
+@click.option("-n", "--namespace", "namespaces", multiple=True)
+@click.option("--standalone", is_flag=True, default=None)
+@click.option("--dev", is_flag=True)
+@click.option("-L", "--liveness", "liveness_endpoint", type=str)
+@click.option("-P", "--peering", "peering_name", type=str, envvar="KOPF_RUN_PEERING")
+@click.option("-p", "--priority", type=int)
+@click.option("-m", "--module", "modules", multiple=True)
+@click.argument("paths", nargs=-1)
 @click.make_pass_decorator(CLIControls, ensure=True)
 def run(
-        __controls: CLIControls,
-        paths: list[str],
-        modules: list[str],
-        peering_name: str | None,
-        priority: int | None,
-        dev: bool | None,
-        standalone: bool | None,
-        namespaces: Collection[references.NamespacePattern],
-        clusterwide: bool,
-        liveness_endpoint: str | None,
+    __controls: CLIControls,
+    paths: list[str],
+    modules: list[str],
+    peering_name: str | None,
+    priority: int | None,
+    dev: bool | None,
+    standalone: bool | None,
+    namespaces: Collection[references.NamespacePattern],
+    clusterwide: bool,
+    liveness_endpoint: str | None,
 ) -> None:
-    """ Start an operator process and handle all the requests. """
+    """Start an operator process and handle all the requests."""
     priority = 666 if dev else priority
-    if os.environ.get('KOPF_RUN_NAMESPACE'):  # legacy for single-namespace mode
-        namespaces = tuple(namespaces) + (os.environ.get('KOPF_RUN_NAMESPACE', ''),)
+    if os.environ.get("KOPF_RUN_NAMESPACE"):  # legacy for single-namespace mode
+        namespaces = tuple(namespaces) + (os.environ.get("KOPF_RUN_NAMESPACE", ""),)
     if namespaces and clusterwide:
-        raise click.UsageError("Either --namespace or --all-namespaces can be used, not both.")
+        raise click.UsageError(
+            "Either --namespace or --all-namespaces can be used, not both."
+        )
     if __controls.registry is not None:
         registries.set_default_registry(__controls.registry)
     loaders.preload(
@@ -98,45 +104,49 @@ def run(
 
 @main.command()
 @logging_options
-@click.option('-n', '--namespace', 'namespaces', multiple=True)
-@click.option('-A', '--all-namespaces', 'clusterwide', is_flag=True)
-@click.option('-i', '--id', type=str, default=None)
-@click.option('--dev', is_flag=True)
-@click.option('-P', '--peering', 'peering_name', required=True, envvar='KOPF_FREEZE_PEERING')
-@click.option('-p', '--priority', type=int, default=100, required=True)
-@click.option('-t', '--lifetime', type=int, required=True)
-@click.option('-m', '--message', type=str)
+@click.option("-n", "--namespace", "namespaces", multiple=True)
+@click.option("-A", "--all-namespaces", "clusterwide", is_flag=True)
+@click.option("-i", "--id", type=str, default=None)
+@click.option("--dev", is_flag=True)
+@click.option(
+    "-P", "--peering", "peering_name", required=True, envvar="KOPF_FREEZE_PEERING"
+)
+@click.option("-p", "--priority", type=int, default=100, required=True)
+@click.option("-t", "--lifetime", type=int, required=True)
+@click.option("-m", "--message", type=str)
 @click.make_pass_decorator(CLIControls, ensure=True)
 def freeze(
-        __controls: CLIControls,
-        id: str | None,
-        message: str | None,
-        lifetime: int,
-        namespaces: Collection[references.NamespacePattern],
-        clusterwide: bool,
-        peering_name: str,
-        priority: int,
-        dev: bool,
+    __controls: CLIControls,
+    id: str | None,
+    message: str | None,
+    lifetime: int,
+    namespaces: Collection[references.NamespacePattern],
+    clusterwide: bool,
+    peering_name: str,
+    priority: int,
+    dev: bool,
 ) -> None:
-    """ Pause the resource handling in the operator(s). """
+    """Pause the resource handling in the operator(s)."""
     pass
 
 
 @main.command()
 @logging_options
-@click.option('-n', '--namespace', 'namespaces', multiple=True)
-@click.option('-A', '--all-namespaces', 'clusterwide', is_flag=True)
-@click.option('-i', '--id', type=str, default=None)
-@click.option('-P', '--peering', 'peering_name', required=True, envvar='KOPF_RESUME_PEERING')
+@click.option("-n", "--namespace", "namespaces", multiple=True)
+@click.option("-A", "--all-namespaces", "clusterwide", is_flag=True)
+@click.option("-i", "--id", type=str, default=None)
+@click.option(
+    "-P", "--peering", "peering_name", required=True, envvar="KOPF_RESUME_PEERING"
+)
 @click.make_pass_decorator(CLIControls, ensure=True)
 def resume(
-        __controls: CLIControls,
-        id: str | None,
-        namespaces: Collection[references.NamespacePattern],
-        clusterwide: bool,
-        peering_name: str,
+    __controls: CLIControls,
+    id: str | None,
+    namespaces: Collection[references.NamespacePattern],
+    clusterwide: bool,
+    peering_name: str,
 ) -> None:
-    """ Resume the resource handling in the operator(s). """
+    """Resume the resource handling in the operator(s)."""
     identity = peering.Identity(id) if id else peering.detect_own_id(manual=True)
     insights = references.Insights()
     settings = configuration.OperatorSettings()
@@ -150,7 +160,6 @@ def resume(
             settings=settings,
             loop=actual_loop,
             _command=peering.touch_command(
-                insights=insights,
-                identity=identity,
-                settings=settings,
-                lifetime=0))
+                insights=insights, identity=identity, settings=settings, lifetime=0
+            ),
+        )

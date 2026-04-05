@@ -20,6 +20,7 @@ Otherwise, all the daemons would be considered as "hung" tasks and would be
 forcefully killed after some timeout --- which can be avoided,
 since we are aware of the daemons, and they are not actually "hung".
 """
+
 import abc
 import asyncio
 import dataclasses
@@ -35,6 +36,8 @@ from kopf._core.actions import application, execution, lifecycles, loggers, prog
 from kopf._core.intents import causes, handlers as handlers_, stoppers
 
 
+def _loop_time() -> float:
+    pass
 
 
 @dataclasses.dataclass(frozen=True)
@@ -51,7 +54,9 @@ class DaemonsMemory:
     live_fresh_body: bodies.Body | None = None
     idle_reset_time: float = dataclasses.field(default_factory=_loop_time)
     forever_stopped: set[ids.HandlerId] = dataclasses.field(default_factory=set)
-    running_daemons: dict[ids.HandlerId, Daemon] = dataclasses.field(default_factory=dict)
+    running_daemons: dict[ids.HandlerId, Daemon] = dataclasses.field(
+        default_factory=dict
+    )
 
 
 class DaemonsMemoriesIterator(metaclass=abc.ABCMeta):
@@ -62,18 +67,19 @@ class DaemonsMemoriesIterator(metaclass=abc.ABCMeta):
     (the daemon killer needs memories, but the memories contain Daemon records)
     by splitting the specialised interface (this class) from the implementation.
     """
+
     @abc.abstractmethod
     def iter_all_daemon_memories(self) -> Iterable[DaemonsMemory]:
         raise NotImplementedError
 
 
 async def spawn_daemons(
-        *,
-        settings: configuration.OperatorSettings,
-        handlers: Sequence[handlers_.SpawningHandler],
-        daemons: dict[ids.HandlerId, Daemon],
-        cause: causes.SpawningCause,
-        memory: DaemonsMemory,
+    *,
+    settings: configuration.OperatorSettings,
+    handlers: Sequence[handlers_.SpawningHandler],
+    daemons: dict[ids.HandlerId, Daemon],
+    cause: causes.SpawningCause,
+    memory: DaemonsMemory,
 ) -> Collection[float]:
     """
     Ensure that all daemons are spawned for this individual resource.
@@ -86,10 +92,10 @@ async def spawn_daemons(
 
 
 async def match_daemons(
-        *,
-        settings: configuration.OperatorSettings,
-        handlers: Sequence[handlers_.SpawningHandler],
-        daemons: dict[ids.HandlerId, Daemon],
+    *,
+    settings: configuration.OperatorSettings,
+    handlers: Sequence[handlers_.SpawningHandler],
+    daemons: dict[ids.HandlerId, Daemon],
 ) -> Collection[float]:
     """
     Re-match the running daemons with the filters, and stop those mismatching.
@@ -100,10 +106,10 @@ async def match_daemons(
 
 
 async def pause_daemons(
-        *,
-        settings: configuration.OperatorSettings,
-        daemons: dict[ids.HandlerId, Daemon],
-        operator_paused: aiotoggles.ToggleSet | None,  # None for tests
+    *,
+    settings: configuration.OperatorSettings,
+    daemons: dict[ids.HandlerId, Daemon],
+    operator_paused: aiotoggles.ToggleSet | None,  # None for tests
 ) -> Collection[float]:
     """
     Re-check the desired state of daemons according to the operator's state.
@@ -133,10 +139,10 @@ async def pause_daemons(
 
 
 async def stop_daemons(
-        *,
-        settings: configuration.OperatorSettings,
-        daemons: dict[ids.HandlerId, Daemon],
-        reason: stoppers.DaemonStoppingReason = stoppers.DaemonStoppingReason.RESOURCE_DELETED,
+    *,
+    settings: configuration.OperatorSettings,
+    daemons: dict[ids.HandlerId, Daemon],
+    reason: stoppers.DaemonStoppingReason = stoppers.DaemonStoppingReason.RESOURCE_DELETED,
 ) -> Collection[float]:
     """
     Terminate all daemons of an individual resource (gracefully and by force).
@@ -182,10 +188,10 @@ async def stop_daemons(
 
 
 async def daemon_killer(
-        *,
-        settings: configuration.OperatorSettings,
-        memories: DaemonsMemoriesIterator,
-        operator_paused: aiotoggles.ToggleSet,
+    *,
+    settings: configuration.OperatorSettings,
+    memories: DaemonsMemoriesIterator,
+    operator_paused: aiotoggles.ToggleSet,
 ) -> None:
     """
     An operator's root task to kill the daemons on the operator's demand.
@@ -217,7 +223,6 @@ async def daemon_killer(
     scheduler = aiotasks.Scheduler()
     try:
         while True:
-
             # Stay here while the operator is running normally, until it is paused.
             await operator_paused.wait_for(True)
 
@@ -234,11 +239,16 @@ async def daemon_killer(
                             coro=stop_daemon(
                                 settings=settings,
                                 daemon=daemon,
-                                reason=stoppers.DaemonStoppingReason.OPERATOR_PAUSING))
+                                reason=stoppers.DaemonStoppingReason.OPERATOR_PAUSING,
+                            ),
+                        )
 
                 # Stay here while the operator is paused, until it is resumed.
                 # The fresh stream of watch-events will spawn new daemons naturally.
-                if sys.version_info < (3, 11):  # python 3.10 only, TODO remove in Oct'26
+                if sys.version_info < (
+                    3,
+                    11,
+                ):  # python 3.10 only, TODO remove in Oct'26
                     await operator_paused.wait_for(False)
                 else:
                     try:
@@ -256,16 +266,20 @@ async def daemon_killer(
                     coro=stop_daemon(
                         settings=settings,
                         daemon=daemon,
-                        reason=stoppers.DaemonStoppingReason.OPERATOR_EXITING))
-        await scheduler.wait()  # prevent insta-cancelling our own coros (daemon stoppers).
+                        reason=stoppers.DaemonStoppingReason.OPERATOR_EXITING,
+                    ),
+                )
+        await (
+            scheduler.wait()
+        )  # prevent insta-cancelling our own coros (daemon stoppers).
         await scheduler.close()
 
 
 async def stop_daemon(
-        *,
-        settings: configuration.OperatorSettings,
-        daemon: Daemon,
-        reason: stoppers.DaemonStoppingReason,
+    *,
+    settings: configuration.OperatorSettings,
+    daemon: Daemon,
+    reason: stoppers.DaemonStoppingReason,
 ) -> None:
     """
     Stop a single daemon.
@@ -312,9 +326,9 @@ async def stop_daemon(
 
 
 async def _wait_for_instant_exit(
-        *,
-        settings: configuration.OperatorSettings,
-        daemon: Daemon,
+    *,
+    settings: configuration.OperatorSettings,
+    daemon: Daemon,
 ) -> None:
     """
     Wait for a kind-of-instant exit of a daemon/timer.
@@ -332,7 +346,9 @@ async def _wait_for_instant_exit(
         pass
 
     elif settings.background.instant_exit_timeout is not None:
-        await aiotasks.wait([daemon.task], timeout=settings.background.instant_exit_timeout)
+        await aiotasks.wait(
+            [daemon.task], timeout=settings.background.instant_exit_timeout
+        )
 
     elif settings.background.instant_exit_zero_time_cycles is not None:
         for _ in range(settings.background.instant_exit_zero_time_cycles):
@@ -342,12 +358,12 @@ async def _wait_for_instant_exit(
 
 
 async def _runner(
-        *,
-        settings: configuration.OperatorSettings,
-        daemons: dict[ids.HandlerId, Daemon],
-        handler: handlers_.SpawningHandler,
-        memory: DaemonsMemory,
-        cause: causes.DaemonCause,
+    *,
+    settings: configuration.OperatorSettings,
+    daemons: dict[ids.HandlerId, Daemon],
+    handler: handlers_.SpawningHandler,
+    memory: DaemonsMemory,
+    cause: causes.DaemonCause,
 ) -> None:
     """
     Guard a running daemon during its life cycle.
@@ -359,10 +375,10 @@ async def _runner(
 
 
 async def _daemon(
-        *,
-        settings: configuration.OperatorSettings,
-        handler: handlers_.DaemonHandler,
-        cause: causes.DaemonCause,
+    *,
+    settings: configuration.OperatorSettings,
+    handler: handlers_.DaemonHandler,
+    cause: causes.DaemonCause,
 ) -> None:
     """
     A long-running guarding task for a resource daemon handler.
@@ -377,11 +393,11 @@ async def _daemon(
 
 
 async def _timer(
-        *,
-        settings: configuration.OperatorSettings,
-        handler: handlers_.TimerHandler,
-        memory: DaemonsMemory,
-        cause: causes.DaemonCause,
+    *,
+    settings: configuration.OperatorSettings,
+    handler: handlers_.TimerHandler,
+    memory: DaemonsMemory,
+    cause: causes.DaemonCause,
 ) -> None:
     """
     A long-running guarding task for resource timer handlers.

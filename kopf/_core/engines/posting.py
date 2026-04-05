@@ -15,6 +15,7 @@ The k8s-events are queued in two ways:
 
 This also includes all logging messages posted by the framework itself.
 """
+
 import asyncio
 import logging
 import sys
@@ -37,13 +38,15 @@ else:
 # Logging and event-posting can happen cross-thread: e.g. in sync-executors.
 # We have to remember our main event-loop with the queue consumer, to make
 # thread-safe coro calls both from inside that event-loop and from outside.
-event_queue_loop_var: ContextVar[asyncio.AbstractEventLoop] = ContextVar('event_queue_loop_var')
-event_queue_var: ContextVar[K8sEventQueue] = ContextVar('event_queue_var')
+event_queue_loop_var: ContextVar[asyncio.AbstractEventLoop] = ContextVar(
+    "event_queue_loop_var"
+)
+event_queue_var: ContextVar[K8sEventQueue] = ContextVar("event_queue_var")
 
 # Per-operator container for settings. We only need a log level from there.
 # This variable is dedicated to a posting engine, as the call chain is interrupted
 # by user-side handlers (no pass-through `settings` arg).
-settings_var: ContextVar[configuration.OperatorSettings] = ContextVar('settings_var')
+settings_var: ContextVar[configuration.OperatorSettings] = ContextVar("settings_var")
 
 
 class K8sEvent(NamedTuple):
@@ -51,6 +54,7 @@ class K8sEvent(NamedTuple):
     A single k8s-event to be posted, with all reference information preserved.
     It can exist and be posted even after the object is garbage-collected.
     """
+
     ref: bodies.ObjectReference
     type: str
     reason: str
@@ -58,10 +62,10 @@ class K8sEvent(NamedTuple):
 
 
 def enqueue(
-        ref: bodies.ObjectReference,
-        type: str,
-        reason: str,
-        message: str,
+    ref: bodies.ObjectReference,
+    type: str,
+    reason: str,
+    message: str,
 ) -> None:
     loop = event_queue_loop_var.get()
     queue = event_queue_var.get()
@@ -95,11 +99,11 @@ def _no_op_event_loop_awakener() -> None:
 
 
 def event(
-        objs: bodies.Body | Iterable[bodies.Body],
-        *,
-        type: str,
-        reason: str,
-        message: str = '',
+    objs: bodies.Body | Iterable[bodies.Body],
+    *,
+    type: str,
+    reason: str,
+    message: str = "",
 ) -> None:
     settings: configuration.OperatorSettings = settings_var.get()
     if settings.posting.enabled:
@@ -109,54 +113,56 @@ def event(
 
 
 def info(
-        objs: bodies.Body | Iterable[bodies.Body],
-        *,
-        reason: str,
-        message: str = '',
+    objs: bodies.Body | Iterable[bodies.Body],
+    *,
+    reason: str,
+    message: str = "",
 ) -> None:
     settings: configuration.OperatorSettings = settings_var.get()
     if settings.posting.enabled and settings.posting.level <= logging.INFO:
         for obj in cast(Iterator[bodies.Body], dicts.walk(objs)):
             ref = bodies.build_object_reference(obj)
-            enqueue(ref=ref, type='Normal', reason=reason, message=message)
+            enqueue(ref=ref, type="Normal", reason=reason, message=message)
 
 
 def warn(
-        objs: bodies.Body | Iterable[bodies.Body],
-        *,
-        reason: str,
-        message: str = '',
+    objs: bodies.Body | Iterable[bodies.Body],
+    *,
+    reason: str,
+    message: str = "",
 ) -> None:
     settings: configuration.OperatorSettings = settings_var.get()
     if settings.posting.level <= logging.WARNING:
         for obj in cast(Iterator[bodies.Body], dicts.walk(objs)):
             ref = bodies.build_object_reference(obj)
-            enqueue(ref=ref, type='Warning', reason=reason, message=message)
+            enqueue(ref=ref, type="Warning", reason=reason, message=message)
 
 
 def exception(
-        objs: bodies.Body | Iterable[bodies.Body],
-        *,
-        reason: str = '',
-        message: str = '',
-        exc: BaseException | None = None,
+    objs: bodies.Body | Iterable[bodies.Body],
+    *,
+    reason: str = "",
+    message: str = "",
+    exc: BaseException | None = None,
 ) -> None:
     if exc is None:
         _, exc, _ = sys.exc_info()
     reason = reason if reason else type(exc).__name__
-    message = f'{message} {exc}' if message and exc else f'{exc}' if exc else f'{message}'
+    message = (
+        f"{message} {exc}" if message and exc else f"{exc}" if exc else f"{message}"
+    )
     settings: configuration.OperatorSettings = settings_var.get()
     if settings.posting.enabled and settings.posting.level <= logging.ERROR:
         for obj in cast(Iterator[bodies.Body], dicts.walk(objs)):
             ref = bodies.build_object_reference(obj)
-            enqueue(ref=ref, type='Error', reason=reason, message=message)
+            enqueue(ref=ref, type="Error", reason=reason, message=message)
 
 
 async def poster(
-        *,
-        event_queue: K8sEventQueue,
-        backbone: references.Backbone,
-        settings: configuration.OperatorSettings,
+    *,
+    event_queue: K8sEventQueue,
+    backbone: references.Backbone,
+    settings: configuration.OperatorSettings,
 ) -> NoReturn:
     """
     Post events in the background as they are queued.
@@ -191,11 +197,11 @@ class K8sPoster(logging.Handler):
     """
     A handler to post all log messages as K8s events.
     """
+
     if sys.version_info[:2] < (3, 13):
         # Disable this optimisation for Python >= 3.13.
         # The `handle` no longer supports having `None` as lock.
-
-
+        pass
 
 
 loggers.logger.addHandler(K8sPoster())

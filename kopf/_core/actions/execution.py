@@ -7,12 +7,20 @@ where the raw watch-events are interpreted and wrapped into extended *causes*.
 The handler execution can also be used in other places, such as in-memory
 activities, when there is no underlying Kubernetes object to patch'n'watch.
 """
+
 import asyncio
 import contextlib
 import dataclasses
 import datetime
 import enum
-from collections.abc import AsyncIterator, Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import (
+    AsyncIterator,
+    Callable,
+    Collection,
+    Iterable,
+    Mapping,
+    Sequence,
+)
 from contextvars import ContextVar
 from typing import Any, AsyncContextManager, NewType, Protocol, TypeVar
 
@@ -26,34 +34,36 @@ DEFAULT_RETRY_DELAY = 1 * 60
 
 
 class PermanentError(Exception):
-    """ A fatal handler error, the retries are useless. """
+    """A fatal handler error, the retries are useless."""
 
 
 class TemporaryError(Exception):
-    """ A potentially recoverable error, should be retried. """
+    """A potentially recoverable error, should be retried."""
+
     def __init__(
-            self,
-            __msg: str | None = None,
-            delay: float | None = DEFAULT_RETRY_DELAY,
+        self,
+        __msg: str | None = None,
+        delay: float | None = DEFAULT_RETRY_DELAY,
     ) -> None:
         super().__init__(__msg)
         self.delay = delay
 
 
 class HandlerTimeoutError(PermanentError):
-    """ An error for the handler's timeout (if set). """
+    """An error for the handler's timeout (if set)."""
 
 
 class HandlerRetriesError(PermanentError):
-    """ An error for the handler's retries exceeded (if set). """
+    """An error for the handler's retries exceeded (if set)."""
 
 
 class HandlerChildrenRetry(TemporaryError):
-    """ An internal pseudo-error to retry for the next sub-handlers attempt. """
+    """An internal pseudo-error to retry for the next sub-handlers attempt."""
 
 
 class ErrorsMode(enum.Enum):
-    """ How arbitrary (non-temporary/non-permanent) exceptions are treated. """
+    """How arbitrary (non-temporary/non-permanent) exceptions are treated."""
+
     IGNORED = enum.auto()
     TEMPORARY = enum.auto()
     PERMANENT = enum.auto()
@@ -61,7 +71,7 @@ class ErrorsMode(enum.Enum):
 
 # A specialised type to highlight the purpose or origin of the data of type Any,
 # to not be mixed with other arbitrary Any values, where it is indeed "any".
-Result = NewType('Result', object)
+Result = NewType("Result", object)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -77,6 +87,7 @@ class Outcome:
     possibly after a few executions, and consisting of simple data types
     (for YAML/JSON serialisation) rather than the actual in-memory objects.
     """
+
     final: bool
     delay: float | None = None
     result: Result | None = None
@@ -90,6 +101,7 @@ class HandlerState(Protocol):
 
     The implementation and detailed fields are in ``progression.HandlerState``.
     """
+
     started: datetime.datetime
     retries: int
 
@@ -108,17 +120,18 @@ class State(Mapping[ids.HandlerId, HandlerState]):
 
 @dataclasses.dataclass
 class Cause(invocation.Kwargable):
-    """ Base non-specific cause as used in the framework's reactor. """
+    """Base non-specific cause as used in the framework's reactor."""
+
     logger: typedefs.Logger
 
 
-
-CauseT = TypeVar('CauseT', bound=Cause)
+CauseT = TypeVar("CauseT", bound=Cause)
 
 
 @dataclasses.dataclass(frozen=True)
 class Handler:
-    """ A handler is a function bound with its behavioral constraints. """
+    """A handler is a function bound with its behavioral constraints."""
+
     id: ids.HandlerId
     fn: invocation.Invokable
     param: Any | None
@@ -137,38 +150,44 @@ class Handler:
 
 
 class LifeCycleFn(Protocol):
-    """ A callback type for handlers selection based on the event/cause. """
+    """A callback type for handlers selection based on the event/cause."""
+
     def __call__(
-            self,
-            handlers: Sequence[Handler],
-            *,
-            state: State,
-            **kwargs: Any,
+        self,
+        handlers: Sequence[Handler],
+        *,
+        state: State,
+        **kwargs: Any,
     ) -> Sequence[Handler]: ...
 
 
 # The task-local context; propagated down the stack instead of multiple kwargs.
 # Used in `@kopf.subhandler` and `kopf.execute()` to add/get the sub-handlers.
-sublifecycle_var: ContextVar[LifeCycleFn | None] = ContextVar('sublifecycle_var')
-subsettings_var: ContextVar[configuration.OperatorSettings] = ContextVar('subsettings_var')
-subrefs_var: ContextVar[Iterable[set[ids.HandlerId]]] = ContextVar('subrefs_var')
-handler_var: ContextVar[Handler] = ContextVar('handler_var')
-cause_var: ContextVar[Cause] = ContextVar('cause_var')
+sublifecycle_var: ContextVar[LifeCycleFn | None] = ContextVar("sublifecycle_var")
+subsettings_var: ContextVar[configuration.OperatorSettings] = ContextVar(
+    "subsettings_var"
+)
+subrefs_var: ContextVar[Iterable[set[ids.HandlerId]]] = ContextVar("subrefs_var")
+handler_var: ContextVar[Handler] = ContextVar("handler_var")
+cause_var: ContextVar[Cause] = ContextVar("cause_var")
 
 
 ExtraContext = Callable[[], AsyncContextManager[None]]
 
 
+@contextlib.asynccontextmanager
+async def no_extra_context() -> AsyncIterator[None]:
+    yield
 
 
 async def execute_handlers_once(
-        lifecycle: LifeCycleFn,
-        settings: configuration.OperatorSettings,
-        handlers: Collection[Handler],
-        cause: Cause,
-        state: State,
-        extra_context: ExtraContext = no_extra_context,
-        default_errors: ErrorsMode = ErrorsMode.TEMPORARY,
+    lifecycle: LifeCycleFn,
+    settings: configuration.OperatorSettings,
+    handlers: Collection[Handler],
+    cause: Cause,
+    state: State,
+    extra_context: ExtraContext = no_extra_context,
+    default_errors: ErrorsMode = ErrorsMode.TEMPORARY,
 ) -> dict[ids.HandlerId, Outcome]:
     """
     Call the next handler(s) from the chain of the handlers.
@@ -202,13 +221,13 @@ async def execute_handlers_once(
 
 
 async def execute_handler_once(
-        settings: configuration.OperatorSettings,
-        handler: Handler,
-        cause: Cause,
-        state: HandlerState,
-        lifecycle: LifeCycleFn | None = None,
-        extra_context: ExtraContext = no_extra_context,
-        default_errors: ErrorsMode = ErrorsMode.TEMPORARY,
+    settings: configuration.OperatorSettings,
+    handler: Handler,
+    cause: Cause,
+    state: HandlerState,
+    lifecycle: LifeCycleFn | None = None,
+    extra_context: ExtraContext = no_extra_context,
+    default_errors: ErrorsMode = ErrorsMode.TEMPORARY,
 ) -> Outcome:
     """
     Execute one and only one handler for one and only one time.
@@ -238,10 +257,15 @@ async def execute_handler_once(
 
         # Strict checks — contrary to the look-ahead checks below, which are approximate.
         # The unforeseen extra time could be added by e.g. operator or cluster downtime.
-        if handler.timeout is not None and state.runtime.total_seconds() >= handler.timeout:
+        if (
+            handler.timeout is not None
+            and state.runtime.total_seconds() >= handler.timeout
+        ):
             raise HandlerTimeoutError(f"{handler} has timed out after {state.runtime}.")
         if handler.retries is not None and state.retries >= handler.retries:
-            raise HandlerRetriesError(f"{handler} has exceeded {state.retries} retries.")
+            raise HandlerRetriesError(
+                f"{handler} has exceeded {state.retries} retries."
+            )
 
         result = await invoke_handler(
             handler=handler,
@@ -269,22 +293,30 @@ async def execute_handler_once(
     except TemporaryError as e:
         # Maybe false-negative but never false-positive checks to save extra cycles & time wasted.
         lookahead_runtime = state.runtime.total_seconds() + (e.delay or 0)
-        lookahead_timeout = handler.timeout is not None and lookahead_runtime >= handler.timeout
-        lookahead_retries = handler.retries is not None and state.retries + 1 >= handler.retries
+        lookahead_timeout = (
+            handler.timeout is not None and lookahead_runtime >= handler.timeout
+        )
+        lookahead_retries = (
+            handler.retries is not None and state.retries + 1 >= handler.retries
+        )
         if lookahead_timeout:
             msg = (
                 f"{handler} failed temporarily but will time out after {handler.timeout} seconds: "
                 f"{str(e) or repr(e)}"
             )
             logger.error(msg)
-            return Outcome(final=True, exception=HandlerTimeoutError(msg), subrefs=subrefs)
+            return Outcome(
+                final=True, exception=HandlerTimeoutError(msg), subrefs=subrefs
+            )
         elif lookahead_retries:
             msg = (
                 f"{handler} failed temporarily but will exceed {handler.retries} retries: "
                 f"{str(e) or repr(e)}"
             )
             logger.error(msg)
-            return Outcome(final=True, exception=HandlerRetriesError(msg), subrefs=subrefs)
+            return Outcome(
+                final=True, exception=HandlerRetriesError(msg), subrefs=subrefs
+            )
         else:
             logger.error(f"{handler} failed temporarily: {str(e) or repr(e)}")
             return Outcome(final=False, exception=e, delay=e.delay, subrefs=subrefs)
@@ -305,8 +337,12 @@ async def execute_handler_once(
     except Exception as e:
         # Maybe false-negative but never false-positive checks to save extra cycles & time wasted.
         lookahead_runtime = state.runtime.total_seconds() + backoff
-        lookahead_timeout = handler.timeout is not None and lookahead_runtime >= handler.timeout
-        lookahead_retries = handler.retries is not None and state.retries + 1 >= handler.retries
+        lookahead_timeout = (
+            handler.timeout is not None and lookahead_runtime >= handler.timeout
+        )
+        lookahead_retries = (
+            handler.retries is not None and state.retries + 1 >= handler.retries
+        )
         if errors_mode == ErrorsMode.IGNORED:
             msg = (
                 f"{handler} failed with an exception and will ignore it: "
@@ -321,7 +357,9 @@ async def execute_handler_once(
                 f"{str(e) or repr(e)}"
             )
             logger.exception(msg)
-            return Outcome(final=True, exception=HandlerTimeoutError(msg), subrefs=subrefs)
+            return Outcome(
+                final=True, exception=HandlerTimeoutError(msg), subrefs=subrefs
+            )
         elif errors_mode == ErrorsMode.TEMPORARY and lookahead_retries:
             msg = (
                 f"{handler} failed with an exception and will stop now "
@@ -329,7 +367,9 @@ async def execute_handler_once(
                 f"{str(e) or repr(e)}"
             )
             logger.exception(msg)
-            return Outcome(final=True, exception=HandlerRetriesError(msg), subrefs=subrefs)
+            return Outcome(
+                final=True, exception=HandlerRetriesError(msg), subrefs=subrefs
+            )
         elif errors_mode == ErrorsMode.TEMPORARY:
             msg = (
                 f"{handler} failed with an exception and will try again in {backoff} seconds: "
@@ -355,16 +395,16 @@ async def execute_handler_once(
 
 
 async def invoke_handler(
-        *,
-        handler: Handler,
-        cause: Cause,
-        retry: int,
-        started: datetime.datetime,
-        runtime: datetime.timedelta,
-        settings: configuration.OperatorSettings,
-        lifecycle: LifeCycleFn | None,
-        subrefs: set[ids.HandlerId],
-        extra_context: ExtraContext,
+    *,
+    handler: Handler,
+    cause: Cause,
+    retry: int,
+    started: datetime.datetime,
+    runtime: datetime.timedelta,
+    settings: configuration.OperatorSettings,
+    lifecycle: LifeCycleFn | None,
+    subrefs: set[ids.HandlerId],
+    extra_context: ExtraContext,
 ) -> Result | None:
     """
     Invoke one handler only, according to the calling conventions.
@@ -381,13 +421,15 @@ async def invoke_handler(
 
     # The context makes it possible and easy to pass the kwargs _through_ the user-space handlers:
     # from the framework to the framework's helper functions (e.g. sub-handling, hierarchies, etc).
-    with invocation.context([
-        (sublifecycle_var, lifecycle),
-        (subsettings_var, settings),
-        (subrefs_var, list(subrefs_var.get([])) + [subrefs]),
-        (handler_var, handler),
-        (cause_var, cause),
-    ]):
+    with invocation.context(
+        [
+            (sublifecycle_var, lifecycle),
+            (subsettings_var, settings),
+            (subrefs_var, list(subrefs_var.get([])) + [subrefs]),
+            (handler_var, handler),
+            (cause_var, cause),
+        ]
+    ):
         async with extra_context():
             result = await invocation.invoke(
                 handler.fn,

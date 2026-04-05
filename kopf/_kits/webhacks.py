@@ -4,8 +4,10 @@ from typing import Any, TypeVar, cast
 
 from kopf._cogs.structs import reviews
 
-_SelfT = TypeVar('_SelfT')
-_ServerFn = TypeVar('_ServerFn', bound=Callable[..., AsyncIterator[reviews.WebhookClientConfig]])
+_SelfT = TypeVar("_SelfT")
+_ServerFn = TypeVar(
+    "_ServerFn", bound=Callable[..., AsyncIterator[reviews.WebhookClientConfig]]
+)
 
 
 class WebhookContextManagerMeta(type):
@@ -15,15 +17,18 @@ class WebhookContextManagerMeta(type):
     Another way is via ``__init_subclass__``, but that requires monkey-patching
     and will not work on slotted classes (when they will be made slotted).
     """
+
     def __new__(
-            cls,
-            name: str,
-            bases: tuple[type, ...],
-            namespace: dict[str, Any],
-            **kwargs: Any,
+        cls,
+        name: str,
+        bases: tuple[type, ...],
+        namespace: dict[str, Any],
+        **kwargs: Any,
     ) -> "WebhookContextManagerMeta":
-        if '__call__' in namespace:
-            namespace['__call__'] = WebhookContextManager._persisted(namespace['__call__'])
+        if "__call__" in namespace:
+            namespace["__call__"] = WebhookContextManager._persisted(
+                namespace["__call__"]
+            )
         return super().__new__(cls, name, bases, namespace, **kwargs)
 
 
@@ -76,3 +81,6 @@ class WebhookContextManager(metaclass=WebhookContextManagerMeta):
                 pass
         self.__generators[:] = []
 
+    @staticmethod
+    def _persisted(wrapped: _ServerFn) -> _ServerFn:
+        return wrapped

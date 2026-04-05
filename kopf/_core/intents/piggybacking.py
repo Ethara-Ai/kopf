@@ -10,6 +10,7 @@ in them, and extracts the basic credentials for its own use.
 .. seealso::
     :mod:`credentials` and :func:`authentication`.
 """
+
 import inspect
 import os
 from collections.abc import Sequence
@@ -31,12 +32,28 @@ PRIORITY_OF_KUBECONFIG: int = 10
 PRIORITY_OF_SERVICE_ACCOUNT: int = 20
 
 
+def login_via_pykube(
+    *,
+    settings: configuration.OperatorSettings,
+    **_: Any,
+) -> credentials.ConnectionInfo | None:
+    pass
 
 
+def login_via_client(
+    *,
+    settings: configuration.OperatorSettings,
+    **_: Any,
+) -> credentials.ConnectionInfo | None:
+    pass
 
 
-
-
+async def login_via_async_client(
+    *,
+    settings: configuration.OperatorSettings,
+    **_: Any,
+) -> credentials.ConnectionInfo | None:
+    pass
 
 
 # We keep the official client library auto-login only because it was
@@ -47,14 +64,18 @@ PRIORITY_OF_SERVICE_ACCOUNT: int = 20
 # kubernetes_asyncio client library.
 
 
+def has_kubeconfig() -> bool:
+    pass
 
 
+def has_service_account() -> bool:
+    pass
 
 
 def login_with_service_account(
-        *,
-        settings: configuration.OperatorSettings,
-        **_: Any,
+    *,
+    settings: configuration.OperatorSettings,
+    **_: Any,
 ) -> credentials.ConnectionInfo | None:
     """
     A minimalistic login handler that can get raw data from a service account.
@@ -68,12 +89,10 @@ def login_with_service_account(
     pass
 
 
-
-
 def login_with_kubeconfig(
-        *,
-        settings: configuration.OperatorSettings,
-        **_: Any,
+    *,
+    settings: configuration.OperatorSettings,
+    **_: Any,
 ) -> credentials.ConnectionInfo | None:
     """
     A minimalistic login handler that can get raw data from a kubeconfig file.
