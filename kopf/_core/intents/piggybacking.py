@@ -32,6 +32,42 @@ PRIORITY_OF_KUBECONFIG: int = 10
 PRIORITY_OF_SERVICE_ACCOUNT: int = 20
 
 
+def has_pykube() -> bool:
+    try:
+        import pykube
+
+        return True
+    except ImportError:
+        return False
+
+
+def has_client() -> bool:
+    try:
+        import kubernetes
+
+        return True
+    except ImportError:
+        return False
+
+
+def has_sync_client() -> bool:
+    try:
+        import kubernetes.client
+
+        return True
+    except ImportError:
+        return False
+
+
+def has_async_client() -> bool:
+    try:
+        import kubernetes_asyncio
+
+        return True
+    except ImportError:
+        return False
+
+
 def login_via_pykube(
     *,
     settings: configuration.OperatorSettings,
