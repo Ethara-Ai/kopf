@@ -299,37 +299,4 @@ async def index_resource(
     Note: K8s-event posting is skipped for ``@kopf.on.event`` handlers,
     as they should be silent. Still, the messages are logged normally.
     """
-    if not registry._indexing.has_handlers(resource=resource):
-        pass
-    elif raw_event['type'] == 'DELETED':
-        # Do not index it if it is deleted. Just discard quickly (ASAP!).
-        indexers.discard(body=body)
-    else:
-        # Otherwise, go for full indexing with handlers invocation with all kwargs.
-        cause = causes.IndexingCause(
-            resource=resource,
-            indices=indexers.indices,
-            logger=logger,
-            patch=patches.Patch(),  # NB: not applied. TODO: get rid of it!
-            memo=memo,
-            body=body,
-        )
-
-        # Note: the indexing state contains only failures & retries. Successes will be re-executed.
-        indexing_handlers = registry._indexing.get_handlers(cause=cause)
-        state = memory.indexing_state
-        state = state if state is not None else progression.State.from_scratch()
-        state = state.with_handlers(indexing_handlers)
-        outcomes = await execution.execute_handlers_once(
-            lifecycle=lifecycles.all_at_once,
-            settings=settings,
-            handlers=indexing_handlers,
-            cause=cause,
-            state=state,
-            default_errors=execution.ErrorsMode.IGNORED,
-        )
-        indexers.replace(body=body, outcomes=outcomes)
-
-        # Remember only failures & retries. Omit successes -- let them be re-executed every time.
-        state = state.with_outcomes(outcomes).without_successes()
-        memory.indexing_state = state if state else None
+    pass

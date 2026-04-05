@@ -116,68 +116,7 @@ async def serve_admission_request(
     so that the resulting function matches the ``WebhookFn`` protocol. Other
     parameters are passed by the webhook servers when they call the function.
     """
-
-    # Reconstruct the cause specially for web handlers.
-    resource = find_resource(request=request, insights=insights)
-    subresource = request.get('request', {}).get('subResource')
-    operation = request.get('request', {}).get('operation')
-    userinfo = request.get('request', {}).get('userInfo')
-    new_body = request.get('request', {}).get('object')
-    old_body = request.get('request', {}).get('oldObject')
-    raw_body = new_body if new_body is not None else old_body
-    if userinfo is None:
-        raise MissingDataError("User info is missing from the admission request.")
-    if raw_body is None:
-        raise MissingDataError("Either old or new object is missing from the admission request.")
-
-    memo = await memories.recall_memo(raw_body, memobase=memobase, ephemeral=operation=='CREATE')
-    body = bodies.Body(raw_body)
-    old = bodies.Body(old_body) if old_body is not None else None
-    new = bodies.Body(new_body) if new_body is not None else None
-    diff = diffs.diff(old, new)
-    patch = patches.Patch(body=body)
-    warnings: list[str] = []
-    cause = causes.WebhookCause(
-        resource=resource,
-        indices=indices,
-        logger=loggers.LocalObjectLogger(body=body, settings=settings),
-        patch=patch,
-        memo=memo,
-        body=body,
-        userinfo=userinfo,
-        warnings=warnings,
-        operation=operation,
-        subresource=subresource,
-        dryrun=bool(request.get('request', {}).get('dryRun')),
-        sslpeer=sslpeer if sslpeer is not None else {},  # ensure a mapping even if not provided.
-        headers=headers if headers is not None else {},  # ensure a mapping even if not provided.
-        webhook=webhook,
-        reason=reason,
-        old=old,
-        new=new,
-        diff=diff,
-    )
-
-    # Retrieve the handlers to be executed; maybe only one if the webhook server provides a hint.
-    handlers_ = registry._webhooks.get_handlers(cause)
-    state = progression.State.from_scratch().with_handlers(handlers_)
-    outcomes = await execution.execute_handlers_once(
-        lifecycle=lifecycles.all_at_once,
-        settings=settings,
-        handlers=handlers_,
-        cause=cause,
-        state=state,
-        default_errors=execution.ErrorsMode.PERMANENT,
-    )
-
-    # Construct the response as per Kubernetes's conventions and expectations.
-    response = build_response(
-        request=request,
-        outcomes=outcomes,
-        warnings=warnings,
-        jsonpatch=patch.as_json_patch(),
-    )
-    return response
+    pass
 
 
 def find_resource(
@@ -188,20 +127,7 @@ def find_resource(
     """
     Identify the requested resource by its meta-information (as discovered).
     """
-    # NB: Absent keys in the request are not acceptable, they must be provided.
-    request_payload: reviews.RequestPayload = request['request']
-    request_resource: reviews.RequestResource = request_payload['resource']
-    group = request_resource['group']
-    version = request_resource['version']
-    plural = request_resource['resource']
-    selector = references.Selector(group=group, version=version, plural=plural)
-    resources = selector.select(insights.webhook_resources)
-    if not resources:
-        raise UnknownResourceError(f"The specified resource has no handlers: {request_resource}")
-    elif len(resources) > 1:
-        raise AmbiguousResourceError(f"The specified resource is ambiguous: {request_resource}")
-    else:
-        return list(resources)[0]
+    pass
 
 
 def build_response(
@@ -214,34 +140,7 @@ def build_response(
     """
     Construct the admission review response to a review request.
     """
-    allowed = all(outcome.exception is None for id, outcome in outcomes.items())
-    response = reviews.Response(
-        apiVersion=request.get('apiVersion', 'admission.k8s.io/v1'),
-        kind=request.get('kind', 'AdmissionReview'),
-        response=reviews.ResponsePayload(
-            uid=request.get('request', {}).get('uid', ''),
-            allowed=allowed))
-    if warnings:
-        response['response']['warnings'] = [str(warning) for warning in warnings]
-    if jsonpatch:
-        encoded_patch: str = base64.b64encode(json.dumps(jsonpatch).encode('utf-8')).decode('ascii')
-        response['response']['patch'] = encoded_patch
-        response['response']['patchType'] = 'JSONPatch'
-
-    # Prefer specialised admission errors to all other errors, Kopf's own errors to arbitrary ones.
-    errors = [outcome.exception for outcome in outcomes.values() if outcome.exception is not None]
-    errors.sort(key=lambda error: (
-        0 if isinstance(error, AdmissionError) else
-        1 if isinstance(error, execution.PermanentError) else
-        2 if isinstance(error, execution.TemporaryError) else
-        9
-    ))
-    if errors:
-        response['response']['status'] = reviews.ResponseStatus(
-            message=str(errors[0]) or repr(errors[0]),
-            code=(errors[0].code if isinstance(errors[0], AdmissionError) else None) or 500,
-        )
-    return response
+    pass
 
 
 async def admission_webhook_server(

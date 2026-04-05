@@ -27,37 +27,7 @@ def authenticated(fn: _F) -> _F:
     activity. Meanwhile, the request-performing function will be awaiting
     new credentials, and re-executed once they are available.
     """
-    @functools.wraps(fn)
-    async def wrapper(*args: Any, **kwargs: Any) -> Any:
-
-        # If a context is explicitly passed, make it a simple call without re-auth.
-        # Exceptions are escalated to a caller, which is probably wrapped itself.
-        if 'context' in kwargs:
-            context = kwargs['context']
-            response = await fn(*args, **kwargs)
-            if isinstance(response, aiohttp.ClientResponse):
-                # Keep track of responses which are using this context.
-                context.add_response(response)
-            return response
-
-        # Otherwise, attempt the execution with the vault credentials and re-authenticate on 401s.
-        vault: credentials.Vault = vault_var.get()
-        async for key, info, context in vault.extended(APIContext, 'contexts'):
-            try:
-                response = await fn(*args, **kwargs, context=context)
-                if isinstance(response, aiohttp.ClientResponse):
-                    # Keep track of responses which are using this context.
-                    context.add_response(response)
-                return response
-            except (errors.APIUnauthorizedError, errors.APISessionClosed) as e:
-                await vault.invalidate(key, info, exc=e)
-
-        # Normally, either `vault.extended()` or `vault.invalidate()` raise the login errors.
-        # The for-cycle can only end if the yielded credentials are not invalidated before trying
-        # the next ones -- but this case exits by `return` or by other (non-401) errors.
-        raise RuntimeError("Reached an impossible state: the end of the authentication cycle.")
-
-    return cast(_F, wrapper)
+    pass
 
 
 class APIContext:

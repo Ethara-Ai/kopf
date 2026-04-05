@@ -76,18 +76,3 @@ class WebhookContextManager(metaclass=WebhookContextManagerMeta):
                 pass
         self.__generators[:] = []
 
-    @staticmethod
-    def _persisted(wrapped: _ServerFn) -> _ServerFn:
-        @functools.wraps(wrapped)
-        async def wrapper(
-                self: "WebhookContextManager",
-                fn: reviews.WebhookFn,
-        ) -> AsyncIterator[reviews.WebhookClientConfig]:
-            iterator = wrapped(self, fn)
-            if isinstance(iterator, AsyncGenerator):
-                self.__generators.append(iterator)
-            async for value in iterator:
-                yield value
-            if isinstance(iterator, AsyncGenerator):
-                self.__generators.remove(iterator)
-        return cast(_ServerFn, wrapper)

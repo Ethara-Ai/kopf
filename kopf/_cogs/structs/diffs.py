@@ -62,9 +62,6 @@ class DiffItem(NamedTuple):
         else:
             return NotImplemented
 
-    @property
-    def op(self) -> DiffOperation:
-        return self.operation
 
 
 class Diff(Sequence[DiffItem]):

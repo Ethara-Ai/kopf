@@ -88,25 +88,10 @@ class APIError(Exception):
         subreprs.append(f'status={self._status!r}')
         return f"{self.__class__.__name__}({', '.join(subreprs)})"
 
-    @property
-    def status(self) -> int:
-        return self._status
 
-    @property
-    def headers(self) -> dict[str, str]:
-        return self._headers
 
-    @property
-    def code(self) -> int | None:
-        return self._payload.get('code') if isinstance(self._payload, dict) else None
 
-    @property
-    def message(self) -> str | None:
-        return self._payload.get('message') if isinstance(self._payload, dict) else None
 
-    @property
-    def details(self) -> RawStatusDetails | None:
-        return self._payload.get('details') if isinstance(self._payload, dict) else None
 
 
 class APIClientError(APIError):  # all 4xx

@@ -263,25 +263,9 @@ SpawningFn = DaemonFn | TimerFn
 _FnT = TypeVar('_FnT', WhenFilterFn, MetaFilterFn)
 
 
-def not_(fn: _FnT) -> _FnT:
-    def not_fn(*args: Any, **kwargs: Any) -> bool:
-        return not fn(*args, **kwargs)
-    return not_fn
 
 
-def all_(fns: Collection[_FnT]) -> _FnT:
-    def all_fn(*args: Any, **kwargs: Any) -> bool:
-        return all(fn(*args, **kwargs) for fn in fns)
-    return all_fn
 
 
-def any_(fns: Collection[_FnT]) -> _FnT:
-    def any_fn(*args: Any, **kwargs: Any) -> bool:
-        return any(fn(*args, **kwargs) for fn in fns)
-    return any_fn
 
 
-def none_(fns: Collection[_FnT]) -> _FnT:
-    def none_fn(*args: Any, **kwargs: Any) -> bool:
-        return not any(fn(*args, **kwargs) for fn in fns)
-    return none_fn

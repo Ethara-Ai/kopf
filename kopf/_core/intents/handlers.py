@@ -49,17 +49,6 @@ class WebhookHandler(ResourceHandler):
     def __str__(self) -> str:
         return f"Webhook {self.id!r}"
 
-    @property
-    def operation(self) -> str | None:  # deprecated
-        warnings.warn("handler.operation is deprecated, use handler.operations", DeprecationWarning)
-        if not self.operations:
-           return None
-        elif len(self.operations) == 1:
-            return list(self.operations)[0]
-        else:
-            raise ValueError(
-                f"{len(self.operations)} operations in the handler. Use it as handler.operations."
-            )
 
 
 @dataclasses.dataclass(frozen=True)

@@ -68,22 +68,11 @@ class ResourceMemories(admission.MemoGetter, daemons.DaemonsMemoriesIterator):
         super().__init__()
         self._items = {}
 
-    def iter_all_memories(self) -> Iterator[ResourceMemory]:
-        yield from self._items.values()
 
     def iter_all_daemon_memories(self) -> Iterator[daemons.DaemonsMemory]:
         for memory in self._items.values():
             yield memory.daemons_memory
 
-    async def recall_memo(
-            self,
-            raw_body: bodies.RawBody,
-            *,
-            memobase: ephemera.AnyMemo | None = None,
-            ephemeral: bool = False,
-    ) -> ephemera.AnyMemo:
-        memory = await self.recall(raw_body=raw_body, memobase=memobase, ephemeral=ephemeral)
-        return memory.memo
 
     async def recall(
             self,
@@ -104,18 +93,7 @@ class ResourceMemories(admission.MemoGetter, daemons.DaemonsMemoriesIterator):
         to not waste RAM for what might never exist. The persistent memo
         will be created *after* the resource creation really happens.
         """
-        key = self._build_key(raw_body)
-        if key in self._items:
-            memory = self._items[key]
-        else:
-            if memobase is None:
-                memory = ResourceMemory(noticed_by_listing=noticed_by_listing)
-            else:
-                memo = copy.copy(memobase)
-                memory = ResourceMemory(noticed_by_listing=noticed_by_listing, memo=memo)
-            if not ephemeral:
-                self._items[key] = memory
-        return memory
+        pass
 
     async def forget(
             self,
@@ -124,9 +102,7 @@ class ResourceMemories(admission.MemoGetter, daemons.DaemonsMemoriesIterator):
         """
         Forget the resource's memory if it exists; or ignore if it does not.
         """
-        key = self._build_key(raw_body)
-        if key in self._items:
-            del self._items[key]
+        pass
 
     def _build_key(
             self,
@@ -141,4 +117,4 @@ class ResourceMemories(admission.MemoGetter, daemons.DaemonsMemoriesIterator):
 
         But it must be consistent within a single process lifetime.
         """
-        return raw_body.get('metadata', {}).get('uid') or ''
+        pass

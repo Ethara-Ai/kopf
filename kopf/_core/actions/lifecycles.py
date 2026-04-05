@@ -22,31 +22,27 @@ Handlers = Sequence[execution.Handler]
 
 def all_at_once(handlers: Handlers, **_: Any) -> Handlers:
     """ Execute all handlers at once, in one event reaction cycle, if possible. """
-    return handlers
+    pass
 
 
 def one_by_one(handlers: Handlers, **_: Any) -> Handlers:
     """ Execute handlers one at a time, in the order they were registered. """
-    return handlers[:1]
+    pass
 
 
 def randomized(handlers: Handlers, **_: Any) -> Handlers:
     """ Execute one handler at a time, in the random order. """
-    return [random.choice(handlers)] if handlers else []
+    pass
 
 
 def shuffled(handlers: Handlers, **_: Any) -> Handlers:
     """ Execute all handlers at once, but in the random order. """
-    return random.sample(handlers, k=len(handlers)) if handlers else []
+    pass
 
 
 def asap(handlers: Handlers, *, state: execution.State, **_: Any) -> Handlers:
     """ Execute one handler at a time, skip on failure, try the next one, retry after the full cycle. """
-
-    def keyfn(handler: execution.Handler) -> int:
-        return state[handler.id].retries or 0
-
-    return sorted(handlers, key=keyfn)[:1]
+    pass
 
 
 _default_lifecycle: execution.LifeCycleFn = asap
@@ -56,8 +52,3 @@ def get_default_lifecycle() -> execution.LifeCycleFn:
     return _default_lifecycle
 
 
-def set_default_lifecycle(lifecycle: execution.LifeCycleFn | None) -> None:
-    global _default_lifecycle
-    if _default_lifecycle is not None:
-        logger.warning(f"The default lifecycle is already set to {_default_lifecycle}, overriding it to {lifecycle}.")
-    _default_lifecycle = lifecycle if lifecycle is not None else asap

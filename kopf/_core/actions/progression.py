@@ -114,23 +114,9 @@ class HandlerState(execution.HandlerState):
     subrefs: Collection[ids.HandlerId] = ()  # ids of actual sub-handlers of all levels deep.
     _origin: progress.ProgressRecord | None = None  # to check later if it has actually changed.
 
-    @property
-    def finished(self) -> bool:
-        return bool(self.success or self.failure)
 
-    @property
-    def sleeping(self) -> bool:
-        now = self.basetime + datetime.timedelta(seconds=asyncio.get_running_loop().time())
-        return not self.finished and self.delayed is not None and self.delayed > now
 
-    @property
-    def awakened(self) -> bool:
-        return bool(not self.finished and not self.sleeping)
 
-    @property
-    def runtime(self) -> datetime.timedelta:
-        now = self.basetime + datetime.timedelta(seconds=asyncio.get_running_loop().time())
-        return now - self.started
 
     @classmethod
     def from_scratch(
@@ -142,54 +128,12 @@ class HandlerState(execution.HandlerState):
         now = basetime + datetime.timedelta(seconds=asyncio.get_running_loop().time())
         return cls(active=True, basetime=basetime, started=now, purpose=purpose)
 
-    @classmethod
-    def from_storage(
-            cls,
-            __d: progress.ProgressRecord,
-            *,
-            basetime: datetime.datetime,
-    ) -> "HandlerState":
-        now = basetime + datetime.timedelta(seconds=asyncio.get_running_loop().time())
-        return cls(
-            active=False,
-            basetime=basetime,
-            started=parse_iso8601(__d.get('started')) or now,
-            stopped=parse_iso8601(__d.get('stopped')),
-            delayed=parse_iso8601(__d.get('delayed')),
-            purpose=__d.get('purpose') if __d.get('purpose') else None,
-            retries=__d.get('retries') or 0,
-            success=__d.get('success') or False,
-            failure=__d.get('failure') or False,
-            message=__d.get('message'),
-            subrefs=__d.get('subrefs') or (),
-            _origin=__d,
-        )
 
-    def for_storage(self) -> progress.ProgressRecord:
-        return progress.ProgressRecord(
-            started=None if self.started is None else format_iso8601(self.started),
-            stopped=None if self.stopped is None else format_iso8601(self.stopped),
-            delayed=None if self.delayed is None else format_iso8601(self.delayed),
-            purpose=None if self.purpose is None else str(self.purpose),
-            retries=None if self.retries is None else int(self.retries),
-            success=None if self.success is None else bool(self.success),
-            failure=None if self.failure is None else bool(self.failure),
-            message=None if self.message is None else str(self.message),
-            subrefs=None if not self.subrefs else list(sorted(self.subrefs)),
-        )
 
-    def as_in_storage(self) -> dict[str, Any]:
-        # Nones are not stored by Kubernetes, so we filter them out for comparison.
-        return {key: val for key, val in self.for_storage().items() if val is not None}
 
     def as_active(self) -> "HandlerState":
         return dataclasses.replace(self, active=True)
 
-    def with_purpose(
-            self,
-            purpose: str | None,
-    ) -> "HandlerState":
-        return dataclasses.replace(self, purpose=purpose)
 
     def with_outcome(
             self,
@@ -252,33 +196,7 @@ class State(execution.State):
     def from_scratch(cls) -> "State":
         return cls({}, basetime=_get_basetime())
 
-    @classmethod
-    def from_storage(
-            cls,
-            *,
-            body: bodies.Body,
-            storage: progress.ProgressStorage,
-            handlers: Iterable[execution.Handler],
-    ) -> "State":
-        basetime = _get_basetime()
-        handler_ids = {handler.id for handler in handlers}
-        handler_states: dict[ids.HandlerId, HandlerState] = {}
-        for handler_id in handler_ids:
-            content = storage.fetch(key=handler_id, body=body)
-            if content is not None:
-                handler_states[handler_id] = HandlerState.from_storage(content, basetime=basetime)
-        return cls(handler_states, basetime=basetime)
 
-    def with_purpose(
-            self,
-            purpose: str | None,
-            handlers: Iterable[execution.Handler] = (),  # to be re-purposed
-    ) -> "State":
-        handler_states: dict[ids.HandlerId, HandlerState] = dict(self)
-        for handler in handlers:
-            handler_states[handler.id] = handler_states[handler.id].with_purpose(purpose)
-        cls = type(self)
-        return cls(handler_states, basetime=self.basetime, purpose=purpose)
 
     def with_handlers(
             self,
@@ -309,46 +227,8 @@ class State(execution.State):
             for handler_id, handler_state in self._states.items()
         }, basetime=self.basetime, purpose=self.purpose)
 
-    def without_successes(self) -> "State":
-        cls = type(self)
-        return cls({
-            handler_id: handler_state
-            for handler_id, handler_state in self._states.items()
-            if not handler_state.success # i.e. failures & in-progress/retrying
-        }, basetime=self.basetime)
 
-    def store(
-            self,
-            body: bodies.Body,
-            patch: patches.Patch,
-            storage: progress.ProgressStorage,
-    ) -> None:
-        for handler_id, handler_state in self._states.items():
-            full_record = handler_state.for_storage()
-            pure_record = handler_state.as_in_storage()
-            if pure_record != handler_state._origin:
-                storage.store(key=handler_id, record=full_record, body=body, patch=patch)
-        storage.flush()
 
-    def purge(
-            self,
-            *,
-            body: bodies.Body,
-            patch: patches.Patch,
-            storage: progress.ProgressStorage,
-            handlers: Iterable[execution.Handler],
-    ) -> None:
-        # Purge only our own handlers and their direct & indirect sub-handlers of all levels deep.
-        # Ignore other handlers (e.g. handlers of other operators).
-        handler_ids = {handler.id for handler in handlers}
-        for handler_id in handler_ids:
-            storage.purge(key=handler_id, body=body, patch=patch)
-        for handler_id, handler_state in self._states.items():
-            if handler_id not in handler_ids:
-                storage.purge(key=handler_id, body=body, patch=patch)
-            for subref in handler_state.subrefs:
-                storage.purge(key=subref, body=body, patch=patch)
-        storage.flush()
 
     def __len__(self) -> int:
         return len(self._states)
@@ -367,42 +247,8 @@ class State(execution.State):
             if handler_state.active
         )
 
-    @property
-    def extras(self) -> dict[str, StateCounters]:
-        purposes = {
-            handler_state.purpose for handler_state in self._states.values()
-            if handler_state.purpose is not None and handler_state.purpose != self.purpose
-        }
-        counters = {
-            purpose: StateCounters(
-                success=len([1 for handler_state in self._states.values()
-                            if handler_state.purpose == purpose and handler_state.success]),
-                failure=len([1 for handler_state in self._states.values()
-                            if handler_state.purpose == purpose and handler_state.failure]),
-                running=len([1 for handler_state in self._states.values()
-                            if handler_state.purpose == purpose and not handler_state.finished]),
-            )
-            for purpose in purposes
-        }
-        return counters
 
-    @property
-    def counts(self) -> StateCounters:
-        purposeful_states = [
-            handler_state for handler_state in self._states.values()
-            if self.purpose is None or handler_state.purpose is None
-               or handler_state.purpose == self.purpose
-        ]
-        return StateCounters(
-            success=len([1 for handler_state in purposeful_states if handler_state.success]),
-            failure=len([1 for handler_state in purposeful_states if handler_state.failure]),
-            running=len([1 for handler_state in purposeful_states if not handler_state.finished]),
-        )
 
-    @property
-    def delay(self) -> float | None:
-        delays = self.delays  # calculate only once, to save bit of CPU
-        return min(delays) if delays else None
 
     @property
     def delays(self) -> Collection[float]:
@@ -413,12 +259,7 @@ class State(execution.State):
         processing routine, based on all delays of different origin:
         e.g. postponed daemons, stopping daemons, temporarily failed handlers.
         """
-        now = self.basetime + datetime.timedelta(seconds=asyncio.get_running_loop().time())
-        return [
-            max(0.0, (handler_state.delayed - now).total_seconds()) if handler_state.delayed else 0
-            for handler_state in self._states.values()
-            if handler_state.active and not handler_state.finished
-        ]
+        pass
 
 
 def deliver_results(
@@ -442,16 +283,7 @@ def deliver_results(
 
     For now, we keep state- and result persistence in one module, but separated.
     """
-    for handler_id, outcome in outcomes.items():
-        if outcome.exception is not None:
-            pass
-        elif outcome.result is None:
-            pass
-        elif isinstance(outcome.result, collections.abc.Mapping):
-            # TODO: merge recursively (patch-merge), do not overwrite the keys if they are present.
-            patch.setdefault('status', {}).setdefault(handler_id, {}).update(outcome.result)
-        else:
-            patch.setdefault('status', {})[handler_id] = copy.deepcopy(outcome.result)
+    pass
 
 
 @overload
@@ -464,8 +296,6 @@ def format_iso8601(val: datetime.datetime) -> str:
     ...
 
 
-def format_iso8601(val: datetime.datetime | None) -> str | None:
-    return None if val is None else val.isoformat(timespec='microseconds')
 
 
 @overload
@@ -478,8 +308,6 @@ def parse_iso8601(val: str) -> datetime.datetime:
     ...
 
 
-def parse_iso8601(val: str | None) -> datetime.datetime | None:
-    return None if val is None else iso8601.parse_date(val, default_timezone=None)
 
 
 def _get_basetime() -> datetime.datetime:

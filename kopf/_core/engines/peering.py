@@ -113,57 +113,7 @@ async def process_peering_event(
     When conflicting operators disappear or become presumably dead,
     resume the event handling in the current operator (un-pause it).
     """
-    body: bodies.RawBody = raw_event['object']
-    meta: bodies.RawMeta = raw_event['object']['metadata']
-
-    # Silently ignore the peering objects which are not ours to worry.
-    if meta.get('name') != settings.peering.name:
-        return
-
-    # Find if we are still the highest priority operator.
-    pairs = cast(dict[str, dict[str, Any]], body.get('status', {}))
-    peers = [Peer(identity=Identity(opid), **opinfo) for opid, opinfo in pairs.items()]
-    dead_peers = [peer for peer in peers if peer.is_dead]
-    live_peers = [peer for peer in peers if not peer.is_dead and peer.identity != identity]
-    prio_peers = [peer for peer in live_peers if peer.priority > settings.peering.priority]
-    same_peers = [peer for peer in live_peers if peer.priority == settings.peering.priority]
-
-    if autoclean and dead_peers:
-        await clean(peers=dead_peers, settings=settings, resource=resource, namespace=namespace)
-
-    if conflicts_found is None:
-        pass
-
-    elif prio_peers:
-        if conflicts_found.is_off():
-            logger.info(f"Pausing operations in favour of {prio_peers}.")
-            await conflicts_found.turn_to(True)
-
-    elif same_peers:
-        logger.warning(f"Possibly conflicting operators with the same priority: {same_peers}.")
-        if conflicts_found.is_off():
-            logger.warning(f"Pausing all operators, including self: {peers}")
-            await conflicts_found.turn_to(True)
-
-    else:
-        if conflicts_found.is_on():
-            logger.info(f"Resuming operations after the pause. Conflicting operators with the same priority are gone.")
-            await conflicts_found.turn_to(False)
-
-    # Either wait for external updates (and exit when they arrive), or until the blocking peers
-    # are expected to expire, and force the immediate re-evaluation by a certain change of self.
-    # This incurs an extra PATCH request besides usual keepalives, but in the complete silence
-    # from other peers that existed a moment earlier, this should not be a problem.
-    now = datetime.datetime.now(datetime.timezone.utc)
-    delays = [(peer.deadline - now).total_seconds() for peer in same_peers + prio_peers]
-    unslept = await aiotime.sleep(delays, wakeup=stream_pressure)
-    if unslept is None and delays:
-        await touch(
-            identity=identity,
-            settings=settings,
-            resource=resource,
-            namespace=namespace,
-        )
+    pass
 
 
 async def keepalive(
@@ -239,25 +189,6 @@ async def touch(
         logger.debug(f"Keep-alive in {name!r} {where}: {result}.")
 
 
-async def clean(
-        *,
-        peers: Iterable[Peer],
-        settings: configuration.OperatorSettings,
-        resource: references.Resource,
-        namespace: references.Namespace,
-) -> None:
-    name = settings.peering.name
-    patch = patches.Patch()
-    patch |= {'status': {peer.identity: None for peer in peers}}
-    await patching.patch_obj(
-        settings=settings,
-        resource=resource,
-        namespace=namespace,
-        name=name,
-        patch=patch,
-        logger=logger,
-        silent=True,
-    )
 
 
 def detect_own_id(*, manual: bool) -> Identity:

@@ -104,15 +104,7 @@ class BaseCause(execution.Cause):
     indices: ephemera.Indices
     memo: ephemera.AnyMemo
 
-    @property
-    def _kwargs(self) -> dict[str, Any]:
-        kwargs = dict(super()._kwargs)
-        del kwargs['indices']
-        return kwargs
 
-    @property
-    def _super_kwargs(self) -> dict[str, Any]:
-        return dict(self.indices)
 
 
 @dataclasses.dataclass
@@ -127,19 +119,6 @@ class ResourceCause(BaseCause):
     patch: patches.Patch
     body: bodies.Body
 
-    @property
-    def _kwargs(self) -> dict[str, Any]:
-        return dict(
-            super()._kwargs,
-            spec=self.body.spec,
-            meta=self.body.metadata,
-            status=self.body.status,
-            uid=self.body.metadata.uid,
-            name=self.body.metadata.name,
-            namespace=self.body.metadata.namespace,
-            labels=self.body.metadata.labels,
-            annotations=self.body.metadata.annotations,
-        )
 
 
 @dataclasses.dataclass
@@ -157,12 +136,6 @@ class WebhookCause(ResourceCause):
     new: bodies.Body | None = None
     diff: diffs.Diff | None = None
 
-    @property
-    def _kwargs(self) -> dict[str, Any]:
-        kwargs = dict(super()._kwargs)
-        del kwargs['reason']
-        del kwargs['webhook']
-        return kwargs
 
 
 @dataclasses.dataclass
@@ -191,11 +164,6 @@ class SpawningCause(ResourceCause):
     """
     reset: bool
 
-    @property
-    def _kwargs(self) -> dict[str, Any]:
-        kwargs = dict(super()._kwargs)
-        del kwargs['reset']
-        return kwargs
 
 
 @dataclasses.dataclass
@@ -212,16 +180,11 @@ class ChangingCause(ResourceCause):
     old: bodies.BodyEssence | None = None
     new: bodies.BodyEssence | None = None
 
-    @property
-    def _kwargs(self) -> dict[str, Any]:
-        kwargs = dict(super()._kwargs)
-        del kwargs['initial']
-        return kwargs
 
     @property
     def deleted(self) -> bool:
         """ Used to conditionally skip/select the @on.resume handlers if the object is deleted. """
-        return finalizers.is_deletion_ongoing(self.body)
+        pass
 
 
 @dataclasses.dataclass
@@ -245,40 +208,12 @@ class DaemonCause(ResourceCause):
     """
     stopper: stoppers.DaemonStopper  # a signaller for the termination and its reason.
 
-    @property
-    def _kwargs(self) -> dict[str, Any]:
-        kwargs = dict(super()._kwargs)
-        del kwargs['stopper']
-        return kwargs
-
-    @property
-    def _sync_kwargs(self) -> dict[str, Any]:
-        return super()._sync_kwargs | dict(stopped=self.stopper.sync_waiter)
-
-    @property
-    def _async_kwargs(self) -> dict[str, Any]:
-        return super()._async_kwargs | dict(stopped=self.stopper.async_waiter)
 
 
-def detect_watching_cause(
-        raw_event: bodies.RawEvent,
-        body: bodies.Body,
-        **kwargs: Any,
-) -> WatchingCause:
-    return WatchingCause(
-        event=raw_event,
-        type=raw_event['type'],
-        body=body,
-        **kwargs)
 
 
-def detect_spawning_cause(
-        body: bodies.Body,
-        **kwargs: Any,
-) -> SpawningCause:
-    return SpawningCause(
-        body=body,
-        **kwargs)
+
+
 
 
 def detect_changing_cause(
@@ -300,43 +235,4 @@ def detect_changing_cause(
     which performs the actual handler invocation, logging, patching,
     and other side-effects.
     """
-
-    # Put them back to the pass-through kwargs (to avoid code duplication).
-    kwargs |= dict(body=body, old=old, new=new, initial=initial)
-    if diff is not None:
-        kwargs |= dict(diff=diff)
-
-    # The object was really deleted from the cluster. But we do not care anymore.
-    if raw_event['type'] == 'DELETED':
-        return ChangingCause(reason=Reason.GONE, **kwargs)
-
-    # The finalizer has been just removed. We are fully done.
-    deletion_is_ongoing = finalizers.is_deletion_ongoing(body=body)
-    deletion_is_blocked = finalizers.is_deletion_blocked(body=body, finalizer=finalizer)
-    if deletion_is_ongoing and not deletion_is_blocked:
-        return ChangingCause(reason=Reason.FREE, **kwargs)
-
-    if deletion_is_ongoing:
-        return ChangingCause(reason=Reason.DELETE, **kwargs)
-
-    # For an object seen for the first time (i.e. just-created), call the creation handlers,
-    # then mark the state as if it was seen when the creation has finished.
-    # Creation never mixes with resuming, even if an object is detected on startup (first listing).
-    if old is None:  # i.e. we have no essence stored
-        kwargs['initial'] = False
-        return ChangingCause(reason=Reason.CREATE, **kwargs)
-
-    # Cases with no essence changes are usually ignored (NOOP). But for the not-yet-resumed objects,
-    # we simulate a fake cause to invoke the resuming handlers. For cases with the essence changes,
-    # the resuming handlers will be mixed-in to the regular cause handling ("cuckoo-style")
-    # due to the ``initial=True`` flag on the cause, regardless of the reason.
-    if not diff and initial:
-        return ChangingCause(reason=Reason.RESUME, **kwargs)
-
-    # The previous step triggers one more patch operation without actual changes. Ignore it.
-    # Either the last-seen state or the status field has changed.
-    if not diff:
-        return ChangingCause(reason=Reason.NOOP, **kwargs)
-
-    # And what is left, is the update operation on one of the useful fields of the existing object.
-    return ChangingCause(reason=Reason.UPDATE, **kwargs)
+    pass

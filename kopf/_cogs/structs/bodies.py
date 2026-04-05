@@ -142,40 +142,12 @@ class Meta(dicts.MappingView[str, Any]):
         self._labels: dicts.MappingView[str, str] = dicts.MappingView(self, 'labels')
         self._annotations: dicts.MappingView[str, str] = dicts.MappingView(self, 'annotations')
 
-    @property
-    def labels(self) -> Labels:
-        return self._labels
 
-    @property
-    def annotations(self) -> Annotations:
-        return self._annotations
 
-    @property
-    def uid(self) -> str:
-        # Intentionally mismatching types: None is impossible in real workloads, only in tests.
-        # For tests, return None if absent —in violation of the declared type— not our problem.
-        # In most such cases, the omitted field is irrelevant for the test and unit-under-test.
-        return cast(str, self.get('uid'))
 
-    @property
-    def name(self) -> str:
-        # Intentionally mismatching types: None is impossible in real workloads, only in tests.
-        # For tests, return None if absent —in violation of the declared type— not our problem.
-        # In most such cases, the omitted field is irrelevant for the test and unit-under-test.
-        return cast(str, self.get('name'))
 
-    @property
-    def namespace(self) -> references.Namespace:
-        # Namespace is absent and None for cluster-wide resources (and also in mocks/tests).
-        return cast(references.Namespace, self.get('namespace'))
 
-    @property
-    def creation_timestamp(self) -> str | None:
-        return cast(str | None, self.get('creationTimestamp'))
 
-    @property
-    def deletion_timestamp(self) -> str | None:
-        return cast(str | None, self.get('deletionTimestamp'))
 
 
 class Spec(dicts.MappingView[str, Any]):
@@ -196,21 +168,9 @@ class Body(dicts.ReplaceableMappingView[str, Any]):
         self._spec = Spec(self)
         self._status = Status(self)
 
-    @property
-    def metadata(self) -> Meta:
-        return self._meta
 
-    @property
-    def meta(self) -> Meta:
-        return self._meta
 
-    @property
-    def spec(self) -> Spec:
-        return self._spec
 
-    @property
-    def status(self) -> Status:
-        return self._status
 
 
 #
@@ -268,12 +228,4 @@ def build_owner_reference(
     Keep in mind that some fields can be absent: e.g. ``namespace``
     for cluster resources, or e.g. ``apiVersion`` for ``kind: Node``, etc.
     """
-    ref = dict(
-        controller=controller,
-        blockOwnerDeletion=block_owner_deletion,
-        apiVersion=body.get('apiVersion'),
-        kind=body.get('kind'),
-        name=body.get('metadata', {}).get('name'),
-        uid=body.get('metadata', {}).get('uid'),
-    )
-    return cast(OwnerReference, {key: val for key, val in ref.items() if val is not None})
+    pass

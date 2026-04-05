@@ -79,14 +79,6 @@ class ResourceRegistry(GenericRegistry[ResourceHandlerT], Generic[ResourceHandle
             if handler.selector is not None  # None is reserved for sub-handlers
         )
 
-    def has_handlers(
-            self,
-            resource: references.Resource,
-    ) -> bool:
-        for handler in self._handlers:
-            if _matches_resource(handler, resource):
-                return True
-        return False
 
     def get_handlers(
             self,
@@ -103,20 +95,7 @@ class ResourceRegistry(GenericRegistry[ResourceHandlerT], Generic[ResourceHandle
     ) -> Iterator[ResourceHandlerT]:
         raise NotImplementedError
 
-    def get_extra_fields(
-            self,
-            resource: references.Resource,
-    ) -> set[dicts.FieldPath]:
-        return set(self.iter_extra_fields(resource=resource))
 
-    def iter_extra_fields(
-            self,
-            resource: references.Resource,
-    ) -> Iterator[dicts.FieldPath]:
-        for handler in self._handlers:
-            if _matches_resource(handler, resource):
-                if handler.field:
-                    yield handler.field
 
 
 class IndexingRegistry(ResourceRegistry[handlers.IndexingHandler, causes.IndexingCause]):
@@ -165,12 +144,7 @@ class SpawningRegistry(ResourceRegistry[handlers.SpawningHandler, causes.Spawnin
         """
         Check whether a finalizer should be added to the given resource or not.
         """
-        # check whether the body matches a deletion handler
-        for handler in self._handlers:
-            if handler.id not in excluded:
-                if handler.requires_finalizer and match(handler=handler, cause=cause):
-                    return True
-        return False
+        pass
 
 
 class ChangingRegistry(ResourceRegistry[handlers.ChangingHandler, causes.ChangingCause]):
@@ -198,31 +172,9 @@ class ChangingRegistry(ResourceRegistry[handlers.ChangingHandler, causes.Changin
         """
         Check whether a finalizer should be added to the given resource or not.
         """
-        # check whether the body matches a deletion handler
-        for handler in self._handlers:
-            if handler.id not in excluded:
-                if handler.requires_finalizer and prematch(handler=handler, cause=cause):
-                    return True
-        return False
+        pass
 
-    def prematch(
-            self,
-            cause: causes.ChangingCause,
-    ) -> bool:
-        for handler in self._handlers:
-            if prematch(handler=handler, cause=cause):
-                return True
-        return False
 
-    def get_resource_handlers(
-            self,
-            resource: references.Resource,
-    ) -> Sequence[handlers.ChangingHandler]:
-        found_handlers: list[handlers.ChangingHandler] = []
-        for handler in self._handlers:
-            if _matches_resource(handler, resource):
-                found_handlers.append(handler)
-        return list(_deduplicated(found_handlers))
 
 
 class WebhooksRegistry(ResourceRegistry[handlers.WebhookHandler, causes.WebhookCause]):
@@ -391,20 +343,6 @@ def _deduplicated(
             yield handler
 
 
-def prematch(
-        handler: handlers.ResourceHandler,
-        cause: causes.ResourceCause,
-) -> bool:
-    # Kwargs are lazily evaluated on the first _actual_ use, and shared for all filters since then.
-    kwargs: dict[str, Any] = {}
-    return (
-        _matches_resource(handler, cause.resource) and
-        _matches_subresource(handler, cause) and
-        _matches_labels(handler, cause, kwargs) and
-        _matches_annotations(handler, cause, kwargs) and
-        _matches_field_values(handler, cause, kwargs) and
-        _matches_filter_callback(handler, cause, kwargs)  # the callback comes in the end!
-    )
 
 
 def match(

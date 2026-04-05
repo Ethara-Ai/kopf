@@ -12,16 +12,7 @@ class Container(Generic[_T]):
         self.changed = asyncio.Condition()
         self._values: Collection[_T] = []  # 0..1 item
 
-    def get_nowait(self) -> _T:  # used mostly in testing
-        try:
-            return next(iter(self._values))
-        except StopIteration:
-            raise LookupError("No value is stored in the container.") from None
 
-    async def set(self, value: _T) -> None:
-        async with self.changed:
-            self._values = [value]
-            self.changed.notify_all()
 
     async def wait(self) -> _T:
         async with self.changed:

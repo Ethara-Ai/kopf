@@ -111,10 +111,6 @@ class Cause(invocation.Kwargable):
     """ Base non-specific cause as used in the framework's reactor. """
     logger: typedefs.Logger
 
-    @property
-    def _kwargs(self) -> dict[str, Any]:
-        # Similar to `dataclasses.asdict()`, but not recursive for other dataclasses.
-        return {field.name: getattr(self, field.name) for field in dataclasses.fields(self)}
 
 
 CauseT = TypeVar('CauseT', bound=Cause)
@@ -163,9 +159,6 @@ cause_var: ContextVar[Cause] = ContextVar('cause_var')
 ExtraContext = Callable[[], AsyncContextManager[None]]
 
 
-@contextlib.asynccontextmanager
-async def no_extra_context() -> AsyncIterator[None]:
-    yield
 
 
 async def execute_handlers_once(

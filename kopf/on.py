@@ -97,19 +97,7 @@ def login(  # lgtm[py/similar-function]
         registry: registries.OperatorRegistry | None = None,
 ) -> ActivityDecorator:
     """ ``@kopf.on.login()`` handler for custom (re-)authentication. """
-    def decorator(  # lgtm[py/similar-function]
-            fn: callbacks.ActivityFn,
-    ) -> callbacks.ActivityFn:
-        real_registry = registry if registry is not None else registries.get_default_registry()
-        real_id = registries.generate_id(fn=fn, id=id)
-        handler = handlers.ActivityHandler(
-            fn=fn, id=real_id, param=param,
-            errors=errors, timeout=timeout, retries=retries, backoff=backoff,
-            activity=causes.Activity.AUTHENTICATION,
-        )
-        real_registry._activities.append(handler)
-        return fn
-    return decorator
+    pass
 
 
 def probe(  # lgtm[py/similar-function]
@@ -234,32 +222,7 @@ def mutate(  # lgtm[py/similar-function]
         registry: registries.OperatorRegistry | None = None,
 ) -> WebhookDecorator:
     """ ``@kopf.on.mutate()`` handler for mutating admission webhooks. """
-    def decorator(  # lgtm[py/similar-function]
-            fn: callbacks.WebhookFn,
-    ) -> callbacks.WebhookFn:
-        nonlocal operations
-        operations = _verify_operations(operation, operations)
-        _warn_conflicting_values(field, value)
-        _verify_filters(labels, annotations)
-        real_registry = registry if registry is not None else registries.get_default_registry()
-        real_field = dicts.parse_field(field) or None  # to not store tuple() as a no-field case.
-        real_id = registries.generate_id(fn=fn, id=id, suffix=".".join(real_field or []))
-        selector = references.Selector(
-            arg1, arg2, arg3,
-            group=group, version=version,
-            kind=kind, plural=plural, singular=singular, shortcut=shortcut, category=category,
-        )
-        handler = handlers.WebhookHandler(
-            fn=fn, id=real_id, param=param,
-            errors=None, timeout=None, retries=None, backoff=None,  # TODO: add some meaning later
-            selector=selector, labels=labels, annotations=annotations, when=when,
-            field=real_field, value=value,
-            reason=causes.WebhookType.MUTATING, operations=operations, subresource=subresource,
-            persistent=persistent, side_effects=side_effects, ignore_failures=ignore_failures,
-        )
-        real_registry._webhooks.append(handler)
-        return fn
-    return decorator
+    pass
 
 
 def resume(  # lgtm[py/similar-function]
@@ -907,12 +870,7 @@ def register(  # lgtm[py/similar-function]
                 def create_single_task(task=task, **_):
                     pass
     """
-    decorator = subhandler(
-        id=id, param=param,
-        errors=errors, timeout=timeout, retries=retries, backoff=backoff,
-        labels=labels, annotations=annotations, when=when,
-    )
-    return decorator(fn)
+    pass
 
 
 def _verify_operations(

@@ -204,13 +204,7 @@ def cherrypick(
     """
     Copy all specified fields between dicts (from src to dst).
     """
-    picker = picker if picker is not None else lambda x: x
-    fields = fields if fields is not None else []
-    for field in fields:
-        try:
-            ensure(dst, field, picker(resolve(src, field)))
-        except KeyError:
-            pass  # absent in the source, nothing to merge
+    pass
 
 
 def walk(
@@ -345,8 +339,4 @@ class ReplaceableMappingView(MappingView[_K, _V], Generic[_K, _V]):
     ... 'value'
     """
 
-    def _replace_from(self, __src: MappingView[_K, _V]) -> None:
-        self._src = __src._src
 
-    def _replace_with(self, __src: Mapping[_K, _V]) -> None:
-        self._src = __src

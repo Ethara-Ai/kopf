@@ -194,44 +194,8 @@ class K8sPoster(logging.Handler):
     if sys.version_info[:2] < (3, 13):
         # Disable this optimisation for Python >= 3.13.
         # The `handle` no longer supports having `None` as lock.
-        def createLock(self) -> None:
-            # Save some time on unneeded locks. Events are posted in the background.
-            # We only put events to the queue, which is already lock-protected.
-            self.lock = None
 
-    def filter(self, record: logging.LogRecord) -> bool:
-        # Only those which have a k8s object referred (see: `ObjectLogger`).
-        # Otherwise, we have nothing to post, and nothing to do.
-        # TODO: remove all bool() -- they were needed for Python 3.12 & MyPy 1.8.0 wrong inference.
-        settings: configuration.OperatorSettings | None
-        settings = getattr(record, 'settings', None)
-        level_ok = settings is not None and bool(record.levelno >= settings.posting.level)
-        enabled = settings is not None and bool(settings.posting.enabled)
-        loggers = settings is not None and bool(settings.posting.loggers)
-        has_ref = hasattr(record, 'k8s_ref')
-        skipped = hasattr(record, 'k8s_skip') and bool(getattr(record, 'k8s_skip'))
-        return enabled and level_ok and loggers and has_ref and not skipped and bool(super().filter(record))
 
-    def emit(self, record: logging.LogRecord) -> None:
-        # Same try-except as in e.g. `logging.StreamHandler`.
-        try:
-            ref = getattr(record, 'k8s_ref')
-            type = (
-                "Debug" if record.levelno <= logging.DEBUG else
-                "Normal" if record.levelno <= logging.INFO else
-                "Warning" if record.levelno <= logging.WARNING else
-                "Error" if record.levelno <= logging.ERROR else
-                "Fatal" if record.levelno <= logging.FATAL else
-                logging.getLevelName(record.levelno).capitalize())
-            reason = 'Logging'
-            message = self.format(record)
-            enqueue(
-                ref=ref,
-                type=type,
-                reason=reason,
-                message=message)
-        except Exception:
-            self.handleError(record)
 
 
 loggers.logger.addHandler(K8sPoster())

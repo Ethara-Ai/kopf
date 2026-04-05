@@ -158,8 +158,6 @@ class WebhookServer(webhacks.WebhookContextManager):
     async def __call__(self, fn: reviews.WebhookFn) -> AsyncIterator[reviews.WebhookClientConfig]:
 
         # Redefine as a coroutine instead of a partial to avoid warnings from aiohttp.
-        async def _serve_fn(request: aiohttp.web.Request) -> aiohttp.web.Response:
-            return await self._serve(fn, request)
 
         while True:
             cadata, context = self._build_ssl()
@@ -212,31 +210,8 @@ class WebhookServer(webhacks.WebhookContextManager):
           This means that the original API operation was done improperly,
           while the webhooks are functional.
         """
-        # The extra information that is passed down to handlers for authentication/authorization.
-        # Note: this is an identity of an apiserver, not of the user that sends an API request.
-        headers = dict(request.headers)
-        sslpeer = request.transport.get_extra_info('peercert') if request.transport else None
-        webhook = request.match_info.get('id')
-        try:
-            text = await request.text()
-            data = json.loads(text)
-            response = await fn(data, webhook=webhook, sslpeer=sslpeer, headers=headers)
-            return aiohttp.web.json_response(response)
-        except admission.AmbiguousResourceError as e:
-            raise aiohttp.web.HTTPConflict(reason=str(e) or None)
-        except admission.UnknownResourceError as e:
-            raise aiohttp.web.HTTPNotFound(reason=str(e) or None)
-        except admission.WebhookError as e:
-            raise aiohttp.web.HTTPBadRequest(reason=str(e) or None)
-        except json.JSONDecodeError as e:
-            raise aiohttp.web.HTTPBadRequest(reason=str(e) or None)
+        pass
 
-    @staticmethod
-    def _allocate_free_port() -> int:
-        with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind(('', 0))  # '' is a special IPv4 form for "any interface"
-            return int(s.getsockname()[1])
 
     @staticmethod
     def _get_accessible_addr(addr: str | None) -> str:
@@ -250,34 +225,8 @@ class WebhookServer(webhacks.WebhookContextManager):
         If the address is not IPv4/IPv6 address or is a regular "specified"
         address, it is used as is. Only the special addressed are overridden.
         """
-        if addr is None:
-            return 'localhost'  # and let the system resolved it to IPv4/IPv6
-        try:
-            ipv4 = ipaddress.IPv4Address(addr)
-        except ipaddress.AddressValueError:
-            pass
-        else:
-            return '127.0.0.1' if ipv4.is_unspecified else addr
-        try:
-            ipv6 = ipaddress.IPv6Address(addr)
-        except ipaddress.AddressValueError:
-            pass
-        else:
-            return '::1' if ipv6.is_unspecified else addr
-        return addr
+        pass
 
-    @staticmethod
-    def _build_url(schema: str, host: str, port: int, path: str) -> str:
-        try:
-            ipv6 = ipaddress.IPv6Address(host)
-        except ipaddress.AddressValueError:
-            pass
-        else:
-            host = f'[{ipv6}]'
-        is_default_port = ((schema == 'http' and port == 80) or
-                           (schema == 'https' and port == 443))
-        netloc = host if is_default_port else f'{host}:{port}'
-        return urllib.parse.urlunsplit([schema, netloc, path, '', ''])
 
     def _build_ssl(self) -> tuple[bytes | None, ssl.SSLContext | None]:
         """
@@ -287,68 +236,7 @@ class WebhookServer(webhacks.WebhookContextManager):
         and a properly initialised SSL context to be used by the server.
         Or ``None`` for both if an HTTP server is needed.
         """
-        cadata = self.cadata
-        context = self.context
-        if self.insecure and self.context is not None:
-            raise ValueError("Insecure mode cannot have an SSL context specified.")
-
-        # Read the provided CA bundle for webhooks' "client config"; not used by the server itself.
-        if cadata is None and self.cafile is not None:
-            cadata = pathlib.Path(self.cafile).read_bytes()
-
-        # Kubernetes does not work with HTTP, so we do not bother and always run HTTPS too.
-        # Except when explicitly said to be insecure, e.g. by ngrok (free plan only supports HTTP).
-        if context is None and not self.insecure:
-            context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
-
-        if context is not None:
-
-            # Load a CA for verifying the client certificates (if provided) by this server.
-            if self.verify_mode is not None:
-                context.verify_mode = self.verify_mode
-            if self.verify_cafile or self.verify_capath or self.verify_cadata:
-                logger.debug("Loading a CA for client certificate verification.")
-                context.load_verify_locations(
-                    self.verify_cafile,
-                    self.verify_capath,
-                    self.verify_cadata,
-                )
-                if context.verify_mode == ssl.CERT_NONE:
-                    context.verify_mode = ssl.CERT_OPTIONAL
-
-            # Load the specified server's certificate, or generate a self-signed one if possible.
-            # If cafile/cadata are not defined, use the server's certificate as a CA for clients.
-            if self.certfile is not None and self.pkeyfile is not None:
-                logger.debug("Using a provided certificate for HTTPS.")
-                context.load_cert_chain(
-                    self.certfile,
-                    self.pkeyfile,
-                    self.password,
-                )
-                if cadata is None and self.certfile is not None:
-                    cadata = pathlib.Path(self.certfile).read_bytes()
-            else:
-                logger.debug("Generating a self-signed certificate for HTTPS.")
-                host = self.host or self.DEFAULT_HOST
-                addr = self._get_accessible_addr(self.addr)
-                hostnames = [host or addr, addr] + list(self.extra_sans)
-                certdata, pkeydata = self.build_certificate(hostnames, self.password)
-                with tempfile.NamedTemporaryFile() as certf, tempfile.NamedTemporaryFile() as pkeyf:
-                    certf.write(certdata)
-                    pkeyf.write(pkeydata)
-                    certf.flush()
-                    pkeyf.flush()
-                    context.load_cert_chain(certf.name, pkeyf.name, self.password)
-
-                # For a self-signed certificate, the CA bundle is the certificate itself,
-                # regardless of what cafile/cadata are provided from outside.
-                cadata = certdata
-
-        # Dump the provided or self-signed CA (but not the key!), e.g. for `curl --cacert ...`
-        if self.cadump is not None and cadata is not None:
-            pathlib.Path(self.cadump).write_bytes(cadata)
-
-        return cadata, context
+        pass
 
     async def __sleep_forever_or_until_ssl_files_change(self) -> None:
         """
@@ -357,25 +245,7 @@ class WebhookServer(webhacks.WebhookContextManager):
         The mounted secrets do not renew their metadata or send the filesystem
         events, so only a full re-read is the guaranteed way of file monitoring.
         """
-        paths = [self.certfile, self.pkeyfile, self.cafile]
-        paths = [path for path in paths if path is not None]
-        initial_digest: str | None = None
-        while True:
-            # For security, do not keep the secrets in memory, hash & garbage collect them asap.
-            # Also, minimize the memory footprint by keeping only a tiny hash of all files combined.
-            hasher = hashlib.new('sha256')  # the algorith is irrelevant
-            for path in paths:
-                with open(str(path), 'rb') as f:
-                    hasher.update(f.read())
-            digest = hasher.hexdigest()
-
-            if initial_digest is None:
-                initial_digest = digest
-
-            if digest == initial_digest:
-                await asyncio.sleep(self.file_check_interval)
-            else:
-                return
+        pass
 
     @staticmethod
     def build_certificate(
@@ -402,49 +272,7 @@ class WebhookServer(webhacks.WebhookContextManager):
         This can change in the future if self-signed certificates become used
         at runtime (e.g. in production/staging environments or other real clusters).
         """
-        try:
-            import certbuilder
-            import oscrypto.asymmetric
-        except ImportError:
-            raise MissingDependencyError(
-                "Using self-signed certificates requires an extra dependency: "
-                "run `pip install certbuilder` or `pip install kopf[dev]`. "
-                "Or pass `insecure=True` to a webhook server to use only HTTP. "
-                "Or generate your own certificates and pass as certfile=/pkeyfile=. "
-                "More: https://docs.kopf.dev/en/stable/admission/")
-
-        # Detect which ones of the hostnames are probably IPv4/IPv6 addresses.
-        # A side-effect: bring them all to their canonical forms.
-        parsed_ips: dict[str, ipaddress.IPv4Address | ipaddress.IPv6Address] = {}
-        for hostname in hostnames:
-            try:
-                parsed_ips[hostname] = ipaddress.IPv4Address(hostname)
-            except ipaddress.AddressValueError:
-                pass  # non-parsable IPs are considered to be regular hostnames
-            try:
-                parsed_ips[hostname] = ipaddress.IPv6Address(hostname)
-            except ipaddress.AddressValueError:
-                pass  # non-parsable IPs are considered to be regular hostnames
-
-        # Later, only the normalised IPs are used as SANs, not the raw IPs.
-        # Remove bindable but non-accessible addresses (like 0.0.0.0) form the SANs.
-        true_hostnames = [hostname for hostname in hostnames if hostname not in parsed_ips]
-        accessible_ips = [str(ip) for ip in parsed_ips.values() if not ip.is_unspecified]
-
-        # Build a certificate as the framework believe is good enough for itself.
-        subject = {'common_name': true_hostnames[0] if true_hostnames else accessible_ips[0]}
-        public_key, private_key = oscrypto.asymmetric.generate_pair('rsa', bit_size=2048)
-        builder = certbuilder.CertificateBuilder(subject, public_key)
-        builder.ca = True
-        builder.key_usage = {'digital_signature', 'key_encipherment', 'key_cert_sign', 'crl_sign'}
-        builder.extended_key_usage = {'server_auth', 'client_auth'}
-        builder.self_signed = True
-        builder.subject_alt_ips = list(set(accessible_ips))  # deduplicate
-        builder.subject_alt_domains = list(set(true_hostnames) | set(accessible_ips))  # deduplicate
-        certificate = builder.build(private_key)
-        cert_pem: bytes = certbuilder.pem_armor_certificate(certificate)
-        pkey_pem: bytes = oscrypto.asymmetric.dump_private_key(private_key, password, target_ms=10)
-        return cert_pem, pkey_pem
+        pass
 
 
 class WebhookK3dServer(WebhookServer):
@@ -613,42 +441,6 @@ class ClusterDetector:
 
     Note: the SSL certificate of the Kubernetes API is checked, not of webhooks.
     """
-    @staticmethod
-    async def guess_host() -> str | None:
-        try:
-            import certvalidator
-        except ImportError:
-            raise MissingDependencyError(
-                "Auto-guessing cluster types requires an extra dependency: "
-                "run `pip install certvalidator` or `pip install kopf[dev]`. "
-                "More: https://docs.kopf.dev/en/stable/admission/")
-
-        hostname, cert = await api.read_sslcert()
-        valcontext = certvalidator.ValidationContext(extra_trust_roots=[cert])
-        validator = certvalidator.CertificateValidator(cert, validation_context=valcontext)
-        certpath = validator.validate_tls(hostname)
-        issuer_cn = certpath.first.issuer.native.get('common_name', '')
-        subject_cn = certpath.first.subject.native.get('common_name', '')
-        subject_org = certpath.first.subject.native.get('organization_name', '')
-        subject_alt_names = [name for name in certpath.first.subject_alt_name_value.native]
-
-        if subject_cn == 'k3s' or subject_org == 'k3s' or issuer_cn.startswith('k3s-'):
-            return WebhookK3dServer.DEFAULT_HOST
-        elif subject_cn == 'minikube' or issuer_cn == 'minikubeCA':
-            return WebhookMinikubeServer.DEFAULT_HOST
-        elif 'docker-for-desktop' in subject_alt_names:
-            return WebhookDockerDesktopServer.DEFAULT_HOST
-        else:
-            # The default timeouts & backoffs are used to retrieve the cluster
-            # version, not those from the operator. It is too difficult to get
-            # the settings here in webhooks. The "proper" way is to retrieve
-            # the version in observation routines and pass it via contextvars,
-            # but this is too overcomplicated for a dev-mode helping utility.
-            settings = configuration.OperatorSettings()
-            versioninfo = await scanning.read_version(settings=settings, logger=logger)
-            if '+k3s' in versioninfo.get('gitVersion', ''):
-                return WebhookK3dServer.DEFAULT_HOST
-        return None
 
 
 class WebhookAutoServer(ClusterDetector, WebhookServer):

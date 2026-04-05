@@ -37,36 +37,12 @@ class Kwargable:
     For this reason, the :class:`Cause` & :class:`Kwargable` classes are split.
     """
 
-    @property
-    def _kwargs(self) -> dict[str, Any]:
-        return {}
 
-    @property
-    def _sync_kwargs(self) -> dict[str, Any]:
-        return self._kwargs
 
-    @property
-    def _async_kwargs(self) -> dict[str, Any]:
-        return self._kwargs
 
-    @property
-    def _super_kwargs(self) -> dict[str, Any]:
-        return {}
 
-    @final
-    @property
-    def kwargs(self) -> dict[str, Any]:
-        return self._kwargs | self._super_kwargs
 
-    @final
-    @property
-    def sync_kwargs(self) -> dict[str, Any]:
-        return self._sync_kwargs | self._super_kwargs
 
-    @final
-    @property
-    def async_kwargs(self) -> dict[str, Any]:
-        return self._async_kwargs | self._super_kwargs
 
 
 @contextlib.contextmanager

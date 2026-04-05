@@ -169,11 +169,8 @@ class PeeringSettings:
     @property
     def namespaced(self) -> bool:
         """ An inverse of ``clusterwide``, for code readability. """
-        return not self.clusterwide
+        pass
 
-    @namespaced.setter
-    def namespaced(self, value: bool) -> None:
-        self.clusterwide = not value
 
 
 @dataclasses.dataclass
@@ -246,15 +243,8 @@ class QueueingSettings:
     @property
     def batch_window(self) -> float:
         """ Deprecated and affects nothing. """
-        warnings.warn("Time-based event batching was removed. Please stop configuring it.",
-                      DeprecationWarning)
-        return self._batch_window
+        pass
 
-    @batch_window.setter
-    def batch_window(self, value: float) -> None:
-        warnings.warn("Time-based event batching was removed. Please stop configuring it.",
-                      DeprecationWarning)
-        self._batch_window = value
 
 
 @dataclasses.dataclass
@@ -347,18 +337,8 @@ class ExecutionSettings:
 
         It can be changed at runtime (the threads/processes are not terminated).
         """
-        return self._max_workers
+        pass
 
-    @max_workers.setter
-    def max_workers(self, value: int) -> None:
-        if value < 1:
-            raise ValueError("Can't set thread pool limit lower than 1.")
-        self._max_workers = value
-
-        if hasattr(self.executor, '_max_workers'):
-            self.executor._max_workers = value
-        else:
-            raise TypeError("Current executor does not support `max_workers`.")
 
 
 @dataclasses.dataclass
@@ -512,9 +492,3 @@ class OperatorSettings:
     networking: NetworkingSettings = dataclasses.field(default_factory=NetworkingSettings)
     persistence: PersistenceSettings = dataclasses.field(default_factory=PersistenceSettings)
 
-    @property
-    def batching(self) -> QueueingSettings:
-        warnings.warn("Batching settings are now queueing settings. "
-                      "Please rename `settings.batching` -> `settings.queueing`",
-                      DeprecationWarning)
-        return self.queueing

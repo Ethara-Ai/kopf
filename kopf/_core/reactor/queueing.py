@@ -158,12 +158,6 @@ async def watcher(
     # In case of a failed worker, stop the watcher, and escalate to the operator to stop it.
     watcher_task = asyncio.current_task()
     worker_error: BaseException | None = None
-    def exception_handler(exc: BaseException) -> None:
-        nonlocal worker_error, watcher_task
-        if worker_error is None:
-            worker_error = exc
-            if watcher_task is not None:  # never happens, but is needed for type-checking.
-                watcher_task.cancel()
 
     # All per-object workers are handled as fire-and-forget jobs via the scheduler,
     # and communicated via the per-object event queues.

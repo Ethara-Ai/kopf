@@ -119,68 +119,13 @@ class KopfRunner(_AbstractKopfRunner):
 
         return False
 
-    def _target(self) -> None:
 
-        # Every thread must have its own loop. The parent thread (pytest)
-        # needs to know when the loop is set up, to be able to shut it down.
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        self._ready.set()
 
-        # Execute the requested CLI command in the thread & thread's loop.
-        # Remember the result & exception for re-raising in the parent thread.
-        try:
-            ctxobj = cli.CLIControls(
-                registry=self.registry,
-                settings=self.settings,
-                stop_flag=self._stop,
-                loop=loop)
-            runner = click.testing.CliRunner()
-            result = runner.invoke(cli.main, *self.args, **self.kwargs, obj=ctxobj)
-        except BaseException as e:
-            self._future.set_exception(e)
-        else:
-            self._future.set_result(result)
-        finally:
 
-            # Shut down the API-watching streams.
-            loop.run_until_complete(loop.shutdown_asyncgens())
 
-            # Shut down the transports and prevent ResourceWarning: unclosed transport.
-            # See: https://docs.aiohttp.org/en/stable/client_advanced.html#graceful-shutdown
-            # Fixed in aiohttp 3.12.4; the sleep is only needed for older versions.
-            if not aiohttpcaps.AIOHTTP_HAS_GRACEFUL_SHUTDOWN:
-                loop.run_until_complete(asyncio.sleep(1.0))
 
-            loop.close()
 
-    @property
-    def future(self) -> ResultFuture:
-        return self._future
 
-    @property
-    def output(self) -> str:
-        return self.future.result().output
-
-    @property
-    def stdout(self) -> str:
-        return self.future.result().stdout
-
-    @property
-    def stdout_bytes(self) -> bytes:
-        return self.future.result().stdout_bytes
-
-    @property
-    def stderr(self) -> str:
-        return self.future.result().stderr
-
-    @property
-    def stderr_bytes(self) -> bytes:
-        return self.future.result().stderr_bytes or b''
-
-    @property
-    def exit_code(self) -> int:
-        return self.future.result().exit_code
 
     @property
     def exception(self) -> _ExcType:

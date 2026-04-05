@@ -351,56 +351,12 @@ class Scheduler:
         # With this extra sleep, such mocked workers are now "done" and the looptime==0.
         await asyncio.sleep(0)
 
-    def _can_spawn(self) -> bool:
-        return (not self._pending_coros.empty() and
-                (self._limit is None or len(self._running_tasks) < self._limit))
 
     async def _task_spawner(self) -> None:
         """ An internal meta-task to actually start pending coros as tasks. """
-        while True:
-            async with self._condition:
-                await self._condition.wait_for(self._can_spawn)
-
-                # Spawn as many tasks as allowed and as many coros as available at the moment.
-                # Since nothing monitors the tasks "actively", we configure them to report back
-                # when they are finished --- to be awaited and released "passively".
-                while self._can_spawn():
-                    coro, name = self._pending_coros.get_nowait()  # guaranteed by the predicate
-                    task = asyncio.create_task(coro=coro, name=name)
-                    task.add_done_callback(self._task_done_callback)
-                    self._running_tasks.add(task)
-                    if self._closed:
-                        task.cancel()  # used to await the coros without executing them.
+        pass
 
     async def _task_cleaner(self) -> None:
         """ An internal meta-task to cleanup the actually finished tasks. """
-        while True:
-            task = await self._cleaning_queue.get()
+        pass
 
-            # Await the task from an outer context to prevent RuntimeWarnings/ResourceWarnings.
-            try:
-                await task
-            except BaseException:
-                # The errors are handled in the done-callback. Suppress what has leaked for safety.
-                pass
-
-            # Ping other tasks to refill the pool of running tasks (or to close the scheduler).
-            async with self._condition:
-                self._running_tasks.discard(task)
-                self._condition.notify_all()  # -> task_spawner() & close()
-
-    def _task_done_callback(self, task: Task) -> None:
-        # When a "fire-and-forget" task is done, release its system resources immediately:
-        # nothing else is going to explicitly "await" for it any time soon, so we must do it.
-        # But since a callback cannot be async, "awaiting" is done in a background utility task.
-        self._running_tasks.discard(task)
-        self._cleaning_queue.put_nowait(task)
-
-        # If failed, initiate a callback defined by the owner of the task (if any).
-        exc: BaseException | None
-        try:
-            exc = task.exception()
-        except asyncio.CancelledError:
-            exc = None
-        if exc is not None and self._exception_handler is not None:
-            self._exception_handler(exc)

@@ -7,13 +7,6 @@ from kopf._cogs.helpers import typedefs
 from kopf._cogs.structs import references
 
 
-async def read_version(
-        *,
-        settings: configuration.OperatorSettings,
-        logger: typedefs.Logger,
-) -> dict[str, str]:
-    rsp: dict[str, str] = await api.get('/version', settings=settings, logger=logger)
-    return rsp
 
 
 async def scan_resources(

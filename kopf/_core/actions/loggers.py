@@ -65,37 +65,9 @@ class ObjectJsonFormatter(ObjectFormatter, _pjl_JsonFormatter):
         super().__init__(*args, **kwargs)
         self._refkey: str = refkey or DEFAULT_JSON_REFKEY
 
-    def add_fields(
-            self,
-            log_record: dict[str, object],
-            record: logging.LogRecord,
-            message_dict: dict[str, object],
-    ) -> None:
-        super().add_fields(log_record, record, message_dict)
-
-        if self._refkey and hasattr(record, 'k8s_ref'):
-            ref = getattr(record, 'k8s_ref')
-            log_record[self._refkey] = ref
-
-        if 'severity' not in log_record:
-            log_record['severity'] = (
-                "debug" if record.levelno <= logging.DEBUG else
-                "info" if record.levelno <= logging.INFO else
-                "warn" if record.levelno <= logging.WARNING else
-                "error" if record.levelno <= logging.ERROR else
-                "fatal")
 
 
 class ObjectPrefixingMixin(ObjectFormatter):
-    def format(self, record: logging.LogRecord) -> str:
-        if hasattr(record, 'k8s_ref'):
-            ref = getattr(record, 'k8s_ref')
-            namespace = ref.get('namespace', '')
-            name = ref.get('name', '')
-            prefix = f"[{namespace}/{name}]" if namespace else f"[{name}]"
-            record = copy.copy(record)  # shallow
-            record.msg = f"{prefix} {record.msg}"
-        return super().format(record)
 
 
 class ObjectPrefixingTextFormatter(ObjectPrefixingMixin, ObjectTextFormatter):
@@ -136,15 +108,6 @@ class ObjectLogger(typedefs.LoggerAdapter):
         ))
 
     # Typed with MutableMapping[] to match the parent's signature.
-    def process(
-            self,
-            msg: str,
-            kwargs: MutableMapping[str, Any],
-    ) -> tuple[str, MutableMapping[str, Any]]:
-        # Native logging overwrites the message's extra with the adapter's extra.
-        # We merge them, so that both message's & adapter's extras are available.
-        kwargs["extra"] = dict(self.extra or {}) | dict(kwargs.get('extra') or {})
-        return msg, kwargs
 
 
 class LocalObjectLogger(ObjectLogger):
@@ -157,9 +120,6 @@ class LocalObjectLogger(ObjectLogger):
     This class is used internally only and is not exposed publicly in any way.
     """
 
-    def log(self, *args: Any, **kwargs: Any) -> None:
-        kwargs['extra'] = dict(kwargs.pop('extra', {}), k8s_skip=True)
-        return super().log(*args, **kwargs)
 
 
 class TerseObjectLogger(LocalObjectLogger):
@@ -174,8 +134,6 @@ class TerseObjectLogger(LocalObjectLogger):
     (e.g. for pods). On the other hand, they are lightweight, so there is
     not much need to know what is happening until warnings/errors happen.
     """
-    def isEnabledFor(self, level: int) -> bool:
-        return super().isEnabledFor(level if level >= logging.WARNING else level - 10)
 
 
 # Used to identify and remove our own handlers on re-runs in e2e tests. Every e2e test injects

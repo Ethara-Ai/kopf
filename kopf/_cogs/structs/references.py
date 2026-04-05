@@ -350,13 +350,6 @@ class Selector:
         clsname = self.__class__.__name__
         return f'{clsname}({kwtext})'
 
-    @property
-    def is_specific(self) -> bool:
-        return (self.kind is not None or
-                self.shortcut is not None or
-                self.plural is not None or
-                self.singular is not None or
-                (self.any_name is not None and not isinstance(self.any_name, Marker)))
 
     def check(self, resource: Resource) -> bool:
         """

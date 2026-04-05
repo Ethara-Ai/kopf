@@ -35,8 +35,6 @@ from kopf._core.actions import application, execution, lifecycles, loggers, prog
 from kopf._core.intents import causes, handlers as handlers_, stoppers
 
 
-def _loop_time() -> float:
-    return asyncio.get_running_loop().time()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -84,35 +82,7 @@ async def spawn_daemons(
     (though usually should be called on the first-seen occasion), so it must
     be idempotent: not having duplicating side-effects on multiple calls.
     """
-    if memory.live_fresh_body is None:  # for type-checking; "not None" is ensured in processing.
-        raise RuntimeError("A daemon is spawned with None as body. This is a bug. Please report.")
-    for handler in handlers:
-        if handler.id not in daemons:
-            stopper = stoppers.DaemonStopper()
-            live_body = memory.live_fresh_body
-            daemon_cause = causes.DaemonCause(
-                resource=cause.resource,
-                indices=cause.indices,
-                logger=cause.logger,
-                memo=cause.memo,
-                body=live_body,
-                patch=patches.Patch(body=live_body),  # not the same as the one-shot spawning patch!
-                stopper=stopper,  # for checking (passed to kwargs)
-            )
-            daemon = Daemon(
-                stopper=stopper,  # for stopping (outside of causes)
-                handler=handler,
-                logger=loggers.LocalObjectLogger(body=cause.body, settings=settings),
-                task=asyncio.create_task(_runner(
-                    settings=settings,
-                    daemons=daemons,  # for self-garbage-collection
-                    handler=handler,
-                    cause=daemon_cause,
-                    memory=memory,
-                ), name=f'runner of {handler.id}'),  # sometimes, daemons; sometimes, timers.
-            )
-            daemons[handler.id] = daemon
-    return []
+    pass
 
 
 async def match_daemons(
@@ -126,18 +96,7 @@ async def match_daemons(
 
     Stopping can take a few iterations, same as :func:`stop_daemons` would do.
     """
-    matching_daemon_ids = {handler.id for handler in handlers}
-    mismatching_daemons = {
-        daemon.handler.id: daemon
-        for daemon in daemons.values()
-        if daemon.handler.id not in matching_daemon_ids
-    }
-    delays = await stop_daemons(
-        settings=settings,
-        daemons=mismatching_daemons,
-        reason=stoppers.DaemonStoppingReason.FILTERS_MISMATCH,
-    )
-    return delays
+    pass
 
 
 async def pause_daemons(
@@ -170,14 +129,7 @@ async def pause_daemons(
 
     This routine does exactly that: stops newly spawned daemons.
     """
-    delays: Collection[float] = []
-    if operator_paused is not None and operator_paused.is_on():
-        delays = await stop_daemons(
-            settings=settings,
-            daemons=daemons,
-            reason=stoppers.DaemonStoppingReason.OPERATOR_PAUSING,
-        )
-    return delays
+    pass
 
 
 async def stop_daemons(
@@ -226,63 +178,7 @@ async def stop_daemons(
     Hence, these duplicate methods of termination for different cases
     (as by their surrounding circumstances: deletion handlers and finalizers).
     """
-    delays: list[float] = []
-    now = asyncio.get_running_loop().time()
-    for daemon in list(daemons.values()):
-        logger = daemon.logger
-        stopper = daemon.stopper
-        age = (now - (stopper.when if stopper.when is not None else now))
-
-        handler = daemon.handler
-        match handler:
-            case handlers_.DaemonHandler():
-                backoff = handler.cancellation_backoff
-                timeout = handler.cancellation_timeout
-                polling = handler.cancellation_polling or settings.background.cancellation_polling
-            case handlers_.TimerHandler():
-                backoff = None
-                timeout = None
-                polling = settings.background.cancellation_polling
-            case _:
-                raise RuntimeError(f"Unsupported daemon handler: {handler!r}")
-
-        # Whatever happens with other flags & logs & timings, this flag must be surely set.
-        if not stopper.is_set(reason=reason):
-            stopper.set(reason=reason)
-            await _wait_for_instant_exit(settings=settings, daemon=daemon)
-
-        # Try different approaches to exiting the daemon based on timings.
-        if daemon.task.done():
-            pass  # same as if the daemon is not in the structure anymore (self-deleted on exit).
-
-        elif backoff is not None and age < backoff:
-            if not stopper.is_set(reason=stoppers.DaemonStoppingReason.DAEMON_SIGNALLED):
-                stopper.set(reason=stoppers.DaemonStoppingReason.DAEMON_SIGNALLED)
-                logger.debug(f"{handler} is signalled to exit gracefully.")
-                await _wait_for_instant_exit(settings=settings, daemon=daemon)
-            if not daemon.task.done():  # due to "instant exit"
-                delays.append(backoff - age)
-
-        elif timeout is not None and age < timeout + (backoff or 0):
-            if not stopper.is_set(reason=stoppers.DaemonStoppingReason.DAEMON_CANCELLED):
-                stopper.set(reason=stoppers.DaemonStoppingReason.DAEMON_CANCELLED)
-                logger.debug(f"{handler} is signalled to exit by force.")
-                daemon.task.cancel()
-                await _wait_for_instant_exit(settings=settings, daemon=daemon)
-            if not daemon.task.done():  # due to "instant exit"
-                delays.append(timeout + (backoff or 0) - age)
-
-        elif timeout is not None:
-            if not stopper.is_set(reason=stoppers.DaemonStoppingReason.DAEMON_ABANDONED):
-                stopper.set(reason=stoppers.DaemonStoppingReason.DAEMON_ABANDONED)
-                logger.warning(f"{handler} did not exit in time. Leaving it orphaned.")
-                warnings.warn(f"{handler} did not exit in time.", ResourceWarning)
-
-        else:
-            logger.debug(f"{handler} is still exiting. The next check is in {polling} seconds.")
-            delays.append(polling)
-
-    return delays
+    pass
 
 
 async def daemon_killer(
@@ -459,44 +355,7 @@ async def _runner(
     Synchronous daemons are awaited until they exit and postpone cancellation.
     The runner will not exit until the thread exits. See ``invoke`` for details.
     """
-    stopper = cause.stopper
-
-    try:
-        if isinstance(handler, handlers_.DaemonHandler):
-            await _daemon(settings=settings, handler=handler, cause=cause)
-        elif isinstance(handler, handlers_.TimerHandler):
-            await _timer(settings=settings, handler=handler, cause=cause, memory=memory)
-        else:
-            raise RuntimeError("Cannot determine which task wrapper to use. This is a bug.")
-
-    finally:
-
-        # Prevent future re-spawns for those exited on their own, for no reason.
-        # Only the filter-mismatching or peering-pausing daemons can be re-spawned.
-        if stopper.reason is None:
-            memory.forever_stopped.add(handler.id)
-
-        # If this daemon is never going to be called again, we can release the
-        # live_fresh_body to save some memory.
-        if handler.id in memory.forever_stopped:
-            # If any other running daemon is referencing this Kubernetes
-            # resource, we can't free it
-            can_free = True
-            this_daemon = daemons[handler.id]
-            for running_daemon in memory.running_daemons.values():
-                if running_daemon is not this_daemon:
-                    can_free = False
-                    break
-            if can_free:
-                memory.live_fresh_body = None
-
-        # Save the memory by not remembering the exited daemons (they may be never re-spawned).
-        del daemons[handler.id]
-
-        # Whatever happened, make sure the sync threads of asyncio threaded executor are notified:
-        # in a hope that they will exit maybe some time later to free the OS/asyncio resources.
-        # A possible case: operator is exiting and cancelling all "hung" non-root tasks, etc.
-        stopper.set(reason=stoppers.DaemonStoppingReason.DONE)
+    pass
 
 
 async def _daemon(
@@ -514,46 +373,7 @@ async def _daemon(
     A few kinds of errors are suppressed, those expected from the daemons when
     they are cancelled due to the resource deletion.
     """
-    resource = cause.resource
-    stopper = cause.stopper
-    logger = cause.logger
-    patch = cause.patch
-    body = cause.body
-
-    if handler.initial_delay is not None:
-        delay = handler.initial_delay(**cause.kwargs) if callable(handler.initial_delay) else handler.initial_delay
-        await aiotime.sleep(delay, wakeup=cause.stopper.async_event)
-
-    # Similar to activities (in-memory execution), but applies patches on every attempt.
-    state = progression.State.from_scratch().with_handlers([handler])
-    while not stopper.is_set() and not state.done:
-
-        outcomes = await execution.execute_handlers_once(
-            lifecycle=lifecycles.all_at_once,  # there is only one anyway
-            settings=settings,
-            handlers=[handler],
-            cause=cause,
-            state=state,
-        )
-        state = state.with_outcomes(outcomes)
-        progression.deliver_results(outcomes=outcomes, patch=patch)
-        _, remaining_patch = await application.patch_and_check(
-            settings=settings,
-            resource=resource,
-            logger=logger,
-            patch=patch,
-            body=body,
-        )
-        patch = cause.patch = patches.Patch(remaining_patch, body=body)
-
-        # The in-memory sleep does not react to resource changes, but only to stopping.
-        if state.delay:
-            await aiotime.sleep(state.delay, wakeup=cause.stopper.async_event)
-
-    if stopper.is_set():
-        logger.debug(f"{handler} has exited on request and will not be retried or restarted.")
-    else:
-        logger.debug(f"{handler} has exited on its own and will not be retried or restarted.")
+    pass
 
 
 async def _timer(
@@ -584,83 +404,4 @@ async def _timer(
     It is much easier to have an extra task which mostly sleeps,
     but calls the handling functions from time to time.
     """
-    resource = cause.resource
-    stopper = cause.stopper
-    logger = cause.logger
-    patch = cause.patch
-    body = cause.body
-
-    if handler.initial_delay is not None:
-        delay = handler.initial_delay(**cause.kwargs) if callable(handler.initial_delay) else handler.initial_delay
-        await aiotime.sleep(delay, wakeup=stopper.async_event)
-
-    # Similar to activities (in-memory execution), but applies patches on every attempt.
-    clock = asyncio.get_running_loop().time
-    state = progression.State.from_scratch().with_handlers([handler])
-    while not stopper.is_set():  # NB: ignore state.done! it is checked below explicitly.
-
-        # Reset success/failure retry counters & timers if it has succeeded. Keep it if failed.
-        # Every next invocation of a successful handler starts the retries from scratch (from zero).
-        if state.done:
-            state = progression.State.from_scratch().with_handlers([handler])
-
-        # Both `now` and `last_seen_time` are moving targets: the last seen time is updated
-        # on every watch-event received, and prolongs the sleep. The sleep is never shortened.
-        if handler.idle is not None:
-            while not stopper.is_set() and clock() - memory.idle_reset_time < handler.idle:
-                delay = memory.idle_reset_time + handler.idle - clock()
-                await aiotime.sleep(delay, wakeup=stopper.async_event)
-            if stopper.is_set():
-                continue
-
-        # Remember the start time for the sharp timing and idle-time-waster below.
-        started = clock()
-
-        # Execute the handler as usually, in-memory, but handle its outcome on every attempt.
-        outcomes = await execution.execute_handlers_once(
-            lifecycle=lifecycles.all_at_once,  # there is only one anyway
-            settings=settings,
-            handlers=[handler],
-            cause=cause,
-            state=state,
-        )
-        state = state.with_outcomes(outcomes)
-        progression.deliver_results(outcomes=outcomes, patch=patch)
-        _, remaining_patch = await application.patch_and_check(
-            settings=settings,
-            resource=resource,
-            logger=logger,
-            patch=patch,
-            body=body,
-        )
-        patch = cause.patch = patches.Patch(remaining_patch, body=body)
-
-        # For temporary errors, override the schedule by the one provided by errors themselves.
-        # It can be either a delay from TemporaryError, or a backoff for an arbitrary exception.
-        if not state.done:
-            await aiotime.sleep(state.delays, wakeup=stopper.async_event)
-
-        # For sharp timers, calculate how much time is left to fit the interval grid:
-        #       |-----|-----|-----|-----|-----|-----|---> (interval=5, sharp=True)
-        #       [slow_handler]....[slow_handler]....[slow...
-        elif handler.interval is not None and handler.sharp:
-            passed_duration = clock() - started
-            remaining_delay = handler.interval - (passed_duration % handler.interval)
-            await aiotime.sleep(remaining_delay, wakeup=stopper.async_event)
-
-        # For regular (non-sharp) timers, simply sleep from last exit to the next call:
-        #       |-----|-----|-----|-----|-----|-----|---> (interval=5, sharp=False)
-        #       [slow_handler].....[slow_handler].....[slow...
-        elif handler.interval is not None:
-            await aiotime.sleep(handler.interval, wakeup=stopper.async_event)
-
-        # For idle-only no-interval timers, wait till the next change (i.e. idling reset).
-        # NB: This will skip the handler in the same tact (1/64th of a second) even if changed.
-        elif handler.idle is not None:
-            while memory.idle_reset_time <= started:
-                await aiotime.sleep(handler.idle, wakeup=stopper.async_event)
-
-        # Only in case there are no intervals and idling, treat it as a one-shot handler.
-        # This makes the handler practically meaningless, but technically possible.
-        else:
-            break
+    pass

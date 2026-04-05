@@ -96,24 +96,14 @@ class ConnectionInfo(KubeContext):
 
     def as_aiohttp_basic_auth(self) -> aiohttp.BasicAuth | None:
         """Make a basic auth for username/password, or ``None`` if absent."""
-        if self.username and self.password:
-            return aiohttp.BasicAuth(self.username, self.password)
-        else:
-            return None
+        pass
 
     def as_http_headers(self) -> dict[str, str]:
         """
         Make a dict with the ``Authorization`` header set to scheme+token,
         or an empty dict if there are no tokens or schemes.
         """
-        if self.scheme and self.token:
-            return {'Authorization': f'{self.scheme} {self.token}'}
-        elif self.scheme:
-            return {'Authorization': f'{self.scheme}'}
-        elif self.token:
-            return {'Authorization': f'Bearer {self.token}'}
-        else:
-            return {}
+        pass
 
     def as_ssl_context(self) -> ssl.SSLContext:
         """
@@ -125,60 +115,8 @@ class ConnectionInfo(KubeContext):
             for a brief moment of time until the SSL context is constructed,
             since Python's :mod:`ssl` cannot load them from memory.
         """
-        # Some SSL data are not accepted directly, so we have to use temp files.
-        # Do not even create temporary files if there is no need. It can be a readonly filesystem.
-        with contextlib.ExitStack() as stack:
+        pass
 
-            cert_path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | None
-            if self.certificate_path:
-                cert_path = self.certificate_path
-            elif self.certificate_data:
-                cert_file = stack.enter_context(tempfile.NamedTemporaryFile(buffering=0))
-                cert_file.write(self.__decode_to_pem(self.certificate_data).encode('ascii'))
-                cert_path = cert_file.name
-            else:
-                cert_path = None
-
-            pkey_path: str | bytes | os.PathLike[str] | os.PathLike[bytes] | None
-            if self.private_key_path:
-                pkey_path = self.private_key_path
-            elif self.private_key_data:
-                pkey_file = stack.enter_context(tempfile.NamedTemporaryFile(buffering=0))
-                pkey_file.write(self.__decode_to_pem(self.private_key_data).encode('ascii'))
-                pkey_path = pkey_file.name
-            else:
-                pkey_path = None
-
-            # The SSL part (both client certificate auth and CA verification).
-            context: ssl.SSLContext
-            if cert_path and pkey_path:
-                context = ssl.create_default_context(
-                    purpose=ssl.Purpose.SERVER_AUTH,
-                    cafile=self.ca_path,
-                    cadata=self.__decode_to_pem(self.ca_data) if self.ca_data is not None else None,
-                )
-                context.load_cert_chain(certfile=cert_path, keyfile=pkey_path)
-            else:
-                context = ssl.create_default_context(
-                    cafile=self.ca_path,
-                    cadata=self.__decode_to_pem(self.ca_data) if self.ca_data is not None else None,
-                )
-
-        if self.insecure:
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_NONE
-
-        return context
-
-    @staticmethod
-    def __decode_to_pem(data: str | bytes) -> str:
-        match data:
-            case str() if data.startswith('-----BEGIN '):
-                return data
-            case bytes() if data.startswith(b'-----BEGIN '):
-                return data.decode('ascii')
-            case _:
-                return base64.b64decode(data).decode('ascii')
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -359,11 +297,7 @@ class Vault(AsyncIterable[tuple[VaultKey, KubeContext]]):
         Unlike invalidation, the expired credentials are not remembered
         and not blocked from reappearing.
         """
-        # Quick & lockless for speed: it is done on every API call, we have no time for locks.
-        now = datetime.datetime.now(datetime.timezone.utc)
-        if self._next_expiration is not None and now >= self._next_expiration:
-            async with self._guard:
-                await self._expire()
+        pass
 
     async def _expire(self) -> None:
         """
@@ -475,9 +409,6 @@ class Vault(AsyncIterable[tuple[VaultKey, KubeContext]]):
         ]
         return all(dt is not None and now >= dt for dt in expirations)  # i.e. expired
 
-    async def wait_for_readiness(self) -> None:
-        async with self._guard:
-            await self._guard.wait_for(lambda: self._ready)
 
     async def wait_for_emptiness(self) -> None:
         async with self._guard:

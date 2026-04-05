@@ -141,52 +141,8 @@ async def resource_observer(
         await asyncio.Event().wait()
 
 
-async def process_discovered_namespace_event(
-        *,
-        raw_event: bodies.RawEvent,
-        namespaces: Collection[references.NamespacePattern],
-        insights: references.Insights,
-        # Must be accepted whether used or not -- as passed by watcher()/worker().
-        stream_pressure: asyncio.Event | None = None,  # None for tests
-        resource_indexed: aiotoggles.Toggle | None = None,  # None for tests & observation
-        operator_indexed: aiotoggles.ToggleSet | None = None,  # None for tests & observation
-        consistency_time: float | None = None,  # None for tests & observation
-) -> None:
-    if raw_event['type'] is None:
-        return
-
-    async with insights.revised:
-        revise_namespaces(raw_events=[raw_event], insights=insights, namespaces=namespaces)
-        insights.revised.notify_all()
 
 
-async def process_discovered_resource_event(
-        *,
-        raw_event: bodies.RawEvent,
-        settings: configuration.OperatorSettings,
-        registry: registries.OperatorRegistry,
-        insights: references.Insights,
-        # Must be accepted whether used or not -- as passed by watcher()/worker().
-        stream_pressure: asyncio.Event | None = None,  # None for tests
-        resource_indexed: aiotoggles.Toggle | None = None,  # None for tests & observation
-        operator_indexed: aiotoggles.ToggleSet | None = None,  # None for tests & observation
-        consistency_time: float | None = None,  # None for tests & observation
-) -> None:
-    # Ignore the initial listing, as all custom resources were already noticed by API listing.
-    # This prevents numerous unneccessary API requests at the the start of the operator.
-    if raw_event['type'] is None:
-        return
-
-    # Re-scan the whole dimension of resources if any single one of them changes. By this, we make
-    # K8s's /apis/ endpoint the source of truth for all resources & versions & preferred versions,
-    # instead of mimicking K8s in interpreting them ourselves (a probable source of bugs).
-    # As long as it is atomic (for asyncio, i.e. sync), the existing tasks will not be affected.
-    group = raw_event['object']['spec']['group']
-    resources = await scanning.scan_resources(groups={group}, settings=settings, logger=logger)
-    async with insights.revised:
-        revise_resources(resources=resources, insights=insights, registry=registry, group=group)
-        await insights.backbone.fill(resources=resources)
-        insights.revised.notify_all()
 
 
 def revise_namespaces(

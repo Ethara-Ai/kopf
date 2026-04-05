@@ -173,51 +173,8 @@ class AnnotationsProgressStorage(conventions.StorageKeyFormingConvention,
         self.verbose = verbose
         self.touch_key = touch_key
 
-    def fetch(
-            self,
-            *,
-            key: ids.HandlerId,
-            body: bodies.Body,
-    ) -> ProgressRecord | None:
-        for full_key in self.make_keys(key, body=body):
-            key_field = ['metadata', 'annotations', full_key]
-            encoded = dicts.resolve(body, key_field, None)
-            decoded = json.loads(encoded) if encoded is not None else None
-            if decoded is not None:
-                return cast(ProgressRecord, decoded)
-        return None
 
-    def store(
-            self,
-            *,
-            key: ids.HandlerId,
-            record: ProgressRecord,
-            body: bodies.Body,
-            patch: patches.Patch,
-    ) -> None:
-        decoded = {key: val for key, val in record.items() if self.verbose or val is not None}
-        encoded = json.dumps(decoded, separators=(',', ':'))  # NB: no spaces
-        for full_key in self.make_keys(key, body=body):
-            key_field = ['metadata', 'annotations', full_key]
-            dicts.ensure(patch, key_field, encoded)
-        self._store_marker(prefix=self.prefix, patch=patch, body=body)
 
-    def purge(
-            self,
-            *,
-            key: ids.HandlerId,
-            body: bodies.Body,
-            patch: patches.Patch,
-    ) -> None:
-        absent = object()
-        for full_key in self.make_keys(key, body=body):
-            key_field = ['metadata', 'annotations', full_key]
-            body_value = dicts.resolve(body, key_field, absent)
-            patch_value = dicts.resolve(patch, key_field, absent)
-            if body_value is not absent:
-                dicts.ensure(patch, key_field, None)
-            elif patch_value is not absent:
-                dicts.remove(patch, key_field)
 
     def touch(
             self,
@@ -301,51 +258,10 @@ class StatusProgressStorage(ProgressStorage):
         real_field = field.format(name=self._name) if isinstance(field, str) else field
         self._field = dicts.parse_field(real_field)
 
-    @property
-    def touch_field(self) -> dicts.FieldPath:
-        return self._touch_field
 
-    @touch_field.setter
-    def touch_field(self, field: dicts.FieldSpec) -> None:
-        real_field = field.format(name=self._name) if isinstance(field, str) else field
-        self._touch_field = dicts.parse_field(real_field)
 
-    def fetch(
-            self,
-            *,
-            key: ids.HandlerId,
-            body: bodies.Body,
-    ) -> ProgressRecord | None:
-        container: dict[ids.HandlerId, ProgressRecord]
-        container = dicts.resolve(body, self.field, {})
-        return container.get(key, None)
 
-    def store(
-            self,
-            *,
-            key: ids.HandlerId,
-            record: ProgressRecord,
-            body: bodies.Body,
-            patch: patches.Patch,
-    ) -> None:
-        # Nones are cleaned by K8s API itself.
-        dicts.ensure(patch, self.field + (key,), record)
 
-    def purge(
-            self,
-            *,
-            key: ids.HandlerId,
-            body: bodies.Body,
-            patch: patches.Patch,
-    ) -> None:
-        absent = object()
-        key_field = self.field + (key,)
-        body_value = dicts.resolve(body, key_field, absent)
-        patch_value = dicts.resolve(patch, key_field, absent)
-        if body_value is not absent:
-            dicts.ensure(patch, key_field, None)
-        elif patch_value is not absent:
-            dicts.remove(patch, key_field)
 
     def touch(
             self,
@@ -390,38 +306,8 @@ class MultiProgressStorage(ProgressStorage):
         super().__init__()
         self.storages = storages
 
-    def fetch(
-            self,
-            *,
-            key: ids.HandlerId,
-            body: bodies.Body,
-    ) -> ProgressRecord | None:
-        for storage in self.storages:
-            content = storage.fetch(key=key, body=body)
-            if content is not None:
-                return content
-        return None
 
-    def store(
-            self,
-            *,
-            key: ids.HandlerId,
-            record: ProgressRecord,
-            body: bodies.Body,
-            patch: patches.Patch,
-    ) -> None:
-        for storage in self.storages:
-            storage.store(key=key, record=record, body=body, patch=patch)
 
-    def purge(
-            self,
-            *,
-            key: ids.HandlerId,
-            body: bodies.Body,
-            patch: patches.Patch,
-    ) -> None:
-        for storage in self.storages:
-            storage.purge(key=key, body=body, patch=patch)
 
     def touch(
             self,

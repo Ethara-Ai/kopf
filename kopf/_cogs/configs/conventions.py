@@ -232,15 +232,7 @@ class StorageKeyMarkingConvention:
         """
         Detect annotation prefixes managed by any other Kopf-based operators.
         """
-        prefixes: set[str] = set()
-        for prefix, name in (key.split('/', 1) for key in keys if '/' in key):
-            if name in self.__KNOWN_MARKERS:
-                prefixes.add(prefix)
-            elif prefix in self.__KNOWN_PREFIXES:
-                prefixes.add(prefix)
-            elif any(prefix.endswith(f'.{p}') for p in self.__KNOWN_PREFIXES):
-                prefixes.add(prefix)
-        return frozenset(prefixes)
+        pass
 
     def _store_marker(
             self,

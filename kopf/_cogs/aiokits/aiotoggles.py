@@ -42,8 +42,6 @@ class Toggle:
     def is_on(self) -> bool:
         return self._state
 
-    def is_off(self) -> bool:
-        return not self._state
 
     async def turn_to(self, __state: bool) -> None:
         """ Turn the toggle on/off, and wake up the tasks waiting for that. """
@@ -56,9 +54,6 @@ class Toggle:
         async with self._condition:
             await self._condition.wait_for(lambda: self._state == bool(__state))
 
-    @property
-    def name(self) -> str | None:
-        return self._name
 
 
 class ToggleSet(Collection[Toggle]):
@@ -117,8 +112,6 @@ class ToggleSet(Collection[Toggle]):
     def is_on(self) -> bool:
         return self._fn(toggle.is_on() for toggle in self._toggles)
 
-    def is_off(self) -> bool:
-        return not self.is_on()
 
     async def wait_for(self, __state: bool) -> None:
         async with self._condition:

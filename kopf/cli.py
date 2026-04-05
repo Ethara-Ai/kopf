@@ -31,23 +31,7 @@ class CLIControls:
 
 def logging_options(fn: Callable[..., Any]) -> Callable[..., Any]:
     """ A decorator to configure logging in all commands the same way."""
-    @click.option('-v', '--verbose', is_flag=True)
-    @click.option('-d', '--debug', is_flag=True)
-    @click.option('-q', '--quiet', is_flag=True)
-    @click.option('--log-format', type=click.Choice(loggers.LogFormat, case_sensitive=False), default='full')
-    @click.option('--log-refkey', type=str)
-    @click.option('--log-prefix/--no-log-prefix', default=None)
-    @functools.wraps(fn)  # to preserve other opts/args
-    def wrapper(verbose: bool, quiet: bool, debug: bool,
-                log_format: loggers.LogFormat = loggers.LogFormat.FULL,
-                log_prefix: bool | None = False,
-                log_refkey: str | None = None,
-                *args: Any, **kwargs: Any) -> Any:
-        loggers.configure(debug=debug, verbose=verbose, quiet=quiet,
-                          log_format=log_format, log_refkey=log_refkey, log_prefix=log_prefix)
-        return fn(*args, **kwargs)
-
-    return wrapper
+    pass
 
 
 @click.group(name='kopf', context_settings=dict(
@@ -135,25 +119,7 @@ def freeze(
         dev: bool,
 ) -> None:
     """ Pause the resource handling in the operator(s). """
-    priority = 666 if dev else priority
-    identity = peering.Identity(id) if id else peering.detect_own_id(manual=True)
-    insights = references.Insights()
-    settings = configuration.OperatorSettings()
-    settings.peering.name = peering_name
-    settings.peering.priority = priority
-    with loops.proper_loop(suggested_loop=__controls.loop) as actual_loop:
-        return running.run(
-            clusterwide=clusterwide,
-            namespaces=namespaces,
-            insights=insights,
-            identity=identity,
-            settings=settings,
-            loop=actual_loop,
-            _command=peering.touch_command(
-                insights=insights,
-                identity=identity,
-                settings=settings,
-                lifetime=lifetime))
+    pass
 
 
 @main.command()

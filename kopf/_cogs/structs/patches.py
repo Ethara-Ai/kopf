@@ -42,13 +42,7 @@ class MetaPatch(dicts.MutableMappingView[str, Any]):
         self._labels = dicts.MutableMappingView(self, 'labels')
         self._annotations = dicts.MutableMappingView(self, 'annotations')
 
-    @property
-    def labels(self) -> dicts.MutableMappingView[str, str | None]:
-        return self._labels
 
-    @property
-    def annotations(self) -> dicts.MutableMappingView[str, str | None]:
-        return self._annotations
 
 
 class SpecPatch(dicts.MutableMappingView[str, Any]):
@@ -94,25 +88,10 @@ class Patch(dict[str, Any]):
         super().clear()
         self._fns.clear()
 
-    @property
-    def fns(self) -> list[PatchFn]:
-        return self._fns
 
-    @property
-    def metadata(self) -> MetaPatch:
-        return self._meta
 
-    @property
-    def meta(self) -> MetaPatch:
-        return self._meta
 
-    @property
-    def spec(self) -> SpecPatch:
-        return self._spec
 
-    @property
-    def status(self) -> StatusPatch:
-        return self._status
 
     def as_json_patch(self, body: bodies.Body | bodies.RawBody | None = None) -> JSONPatch:
         """

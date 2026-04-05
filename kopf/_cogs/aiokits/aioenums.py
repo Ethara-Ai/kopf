@@ -49,12 +49,6 @@ class FlagSetter(Generic[FlagReasonT]):
         matching_reason = reason is None or (self.reason is not None and reason in self.reason)
         return matching_reason and self.sync_event.is_set()
 
-    def set(self, reason: FlagReasonT | None = None) -> None:
-        reason = reason if reason is not None else self.reason  # to keep existing values
-        self.when = self.when if self.when is not None else asyncio.get_running_loop().time()
-        self.reason = reason if self.reason is None or reason is None else self.reason | reason
-        self.sync_event.set()
-        self.async_event.set()  # it is thread-safe: always called in operator's event loop.
 
 
 class FlagWaiter(Generic[FlagReasonT]):
@@ -92,9 +86,6 @@ class FlagWaiter(Generic[FlagReasonT]):
     def is_set(self) -> bool:
         return self._setter.is_set()
 
-    @property
-    def reason(self) -> FlagReasonT | None:
-        return self._setter.reason
 
     # See the docstring for AsyncFlagPromise for explanation.
     def wait(self, timeout: float | None = None) -> "FlagWaiter[FlagReasonT]":

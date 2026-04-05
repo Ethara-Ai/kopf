@@ -25,20 +25,6 @@ async def get_default_namespace(
     return context.default_namespace
 
 
-@auth.authenticated
-async def read_sslcert(
-        *,
-        context: auth.APIContext | None = None,
-) -> tuple[str, bytes]:
-    if context is None:
-        raise RuntimeError("API instance is not injected by the decorator.")
-
-    parsed = urllib.parse.urlparse(context.server)
-    host = parsed.hostname or ''  # NB: it cannot be None/empty in our case.
-    port = parsed.port or 443
-    loop = asyncio.get_running_loop()
-    cert = await loop.run_in_executor(None, ssl.get_server_certificate, (host, port))
-    return host, cert.encode('ascii')
 
 
 @auth.authenticated
@@ -231,10 +217,6 @@ async def stream(
 ) -> AsyncIterator[Any]:
     # This dirty trickery is for cases when the server thinks too slowly before
     # sending the headers, but the stopper is already set during the initial wait.
-    def request_cancel_callback(_: aiotasks.Future) -> None:
-        task = asyncio.current_task()
-        assert task is not None  # for type-checkers; this is `async def`, so always in a task.
-        task.cancel()
 
     if stopper is not None and not stopper.done():
         stopper.add_done_callback(request_cancel_callback)
@@ -264,8 +246,6 @@ async def stream(
 
     # Once the headers were sent & received, the stopper works slightly differently:
     # it closes the response instead of cancelling the already performed request.
-    def response_close_callback(_: aiotasks.Future) -> None:
-        response.close()
 
     if stopper is not None:
         stopper.add_done_callback(response_close_callback)
